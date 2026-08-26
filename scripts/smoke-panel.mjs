@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { html } from '../vendor/arrow.js';
 import { formatEvalException, listen } from '../devtools/host.js';
 import { matchesSearch, store, visibleEntities } from '../ui/store.js';
 
@@ -9,30 +8,26 @@ const panelJs = readFileSync(new URL('devtools/panel.js', root), 'utf8');
 const panelApp = readFileSync(new URL('ui/app.js', root), 'utf8');
 const panelHtml = readFileSync(new URL('devtools/panel.html', root), 'utf8');
 const themeCss = readFileSync(new URL('ui/theme.css', root), 'utf8');
-const vendor = readFileSync(new URL('vendor/arrow.js', root), 'utf8');
+const vanJs = readFileSync(new URL('vendor/van.js', root), 'utf8');
+const vanXJs = readFileSync(new URL('vendor/van-x.js', root), 'utf8');
 
 assert.match(panelHtml, /type="module" src="panel.js"/, 'Panel must load as an ES module.');
-assert.match(panelApp, /from '\.\.\/vendor\/arrow\.js'/, 'Panel UI must use the vendored ArrowJS runtime.');
-assert.match(panelApp, /\$\{\(\) => \{\s*const entities = visibleEntities/, 'Entity lists must be reactive template slots.');
-assert.match(panelApp, /\$\{\(\) => Detail\(\)\}/, 'Detail view must stay a reactive function boundary.');
-assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel templates must not assign innerHTML.');
-assert.match(vendor, /from ['"]\.\/chunks\/internal-/, 'Vendored ArrowJS must stay self-contained in the extension.');
-assert.match(vendor, /template\.isT = true/, 'Vendor must be dist/index.mjs so html templates keep isT; index.min.mjs mangles it.');
-assert.doesNotMatch(vendor, /o\.I=1/, 'Do not vendor the minified Arrow entry that breaks isTpl detection.');
-const sampleTpl = html`<span>ok</span>`;
-assert.equal(typeof sampleTpl, 'function');
-assert.equal(sampleTpl.isT, true, 'html() templates must expose isT so nested views render as DOM.');
+assert.match(panelApp, /from '\.\.\/vendor\/van\.js'/, 'Panel UI must use the vendored VanJS runtime.');
+assert.match(panelApp, /van\.tags/, 'Panel UI must use VanJS tag functions.');
+assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel components must not assign innerHTML.');
+assert.match(vanJs, /tags:/, 'Vendored VanJS must be self-contained in the extension.');
+assert.match(vanXJs, /reactive/, 'Vendored VanX must be self-contained in the extension.');
 assert.match(themeCss, /--sys-color-base/, 'Shared theme tokens must include DevTools system colors.');
 assert.match(
   panelJs,
   /function selectEntity\(entity, \{ inspect = false, highlight = true \} = \{\}\)/,
   'Entity selection must stay on the Schema tab; inspect() switches DevTools panels.',
 );
-assert.match(panelApp, /id="btn-inspect"/, 'Inspect in Elements must remain an explicit action.');
+assert.match(panelApp, /id:\s*['"]btn-inspect['"]/, 'Inspect in Elements must remain an explicit action.');
 assert.match(panelApp, /actions\.inspectSelected\(\)/, 'Inspect in Elements must be wired to the explicit button.');
 assert.match(
   panelApp,
-  /actions\.selectEntity\(entity, \{ inspect: event\.altKey \}\)/,
+  /actions\.selectEntity\(entity,\s*\{\s*inspect:\s*event\.altKey\s*\}\)/,
   'Ordinary entity clicks may inspect only when Alt is held.',
 );
 assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel templates must not assign innerHTML.');
@@ -79,4 +74,4 @@ let listened = 0;
 assert.equal(listen({ addListener: (handler) => handler() }, () => { listened += 1; }), true);
 assert.equal(listened, 1);
 
-console.log('panel selection vs inspect() smoke ok');
+console.log('vanjs panel selection vs inspect() smoke ok');

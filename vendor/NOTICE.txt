@@ -1,1 +1,2 @@
-ArrowJS @arrow-js/core 1.0.6 (MIT). https://github.com/standardagents/arrow-js
+VanJS vanjs-core 1.6.1 (MIT). https://vanjs.org
+VanX vanjs-ext 0.6.3 (MIT). https://vanjs.org/x

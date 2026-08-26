@@ -1,4 +1,4 @@
-import { html } from '../vendor/arrow.js';
+import van from '../vendor/van.js';
 import {
   actions,
   buildEntityGraph,
@@ -12,6 +12,27 @@ import {
   visibleEntities,
   visibleFindings,
 } from './store.js';
+
+const {
+  div,
+  span,
+  p,
+  button,
+  input,
+  textarea,
+  a,
+  header,
+  main,
+  section,
+  ul,
+  li,
+  article,
+  img,
+  pre,
+  small,
+  strong,
+  footer,
+} = van.tags;
 
 const VIEWS = [
   ['tree', 'Tree'],
@@ -27,34 +48,33 @@ function scoreLabel() {
 }
 
 function EntityLink(entity, label) {
-  return html`
-    <button
-      type="button"
-      class="tree-link"
-      title="${`Jump to ${entity.types.join(', ') || entity.id}`}"
-      @click="${(event) => {
+  return button(
+    {
+      type: 'button',
+      class: 'tree-link',
+      title: `Jump to ${entity.types.join(', ') || entity.id}`,
+      onclick: (event) => {
         event.stopPropagation();
         actions.selectEntity(entity);
-      }}"
-    ><span class="tree-link-icon">↗</span> ${label}</button>
-  `;
+      },
+    },
+    span({ class: 'tree-link-icon' }, '↗'),
+    ' ',
+    label,
+  );
 }
 
 function Scalar(value, idMap) {
-  if (value === null) return html`<span class="dt-null">null</span>`;
-  if (value === undefined) return html`<span class="dt-null">undefined</span>`;
+  if (value === null) return span({ class: 'dt-null' }, 'null');
+  if (value === undefined) return span({ class: 'dt-null' }, 'undefined');
   if (typeof value === 'string') {
     const target = idMap.get(value);
     if (target) return EntityLink(target, value);
-    return html`<span class="dt-string">${() => `"${value}"`}</span>`;
+    return span({ class: 'dt-string' }, `"${value}"`);
   }
-  if (typeof value === 'number') {
-    return html`<span class="dt-number">${() => String(value)}</span>`;
-  }
-  if (typeof value === 'boolean') {
-    return html`<span class="dt-boolean">${() => String(value)}</span>`;
-  }
-  return html`<span class="dt-value">${() => JSON.stringify(value)}</span>`;
+  if (typeof value === 'number') return span({ class: 'dt-number' }, String(value));
+  if (typeof value === 'boolean') return span({ class: 'dt-boolean' }, String(value));
+  return span({ class: 'dt-value' }, JSON.stringify(value));
 }
 
 function IdRef(value, idMap) {
@@ -84,541 +104,620 @@ function TreeValue(value, idMap, path = 'root', entityId = '') {
   }
 
   const collapseKey = `${entityId}:${path}`;
-  const isCollapsed = Boolean(store.collapsedPaths[collapseKey]);
 
   if (Array.isArray(value)) {
-    if (value.length === 0) return html`<span class="dt-dim">[]</span>`;
-    return html`
-      <div class="tree-branch">
-        <span
-          class="${() => `tree-caret ${isCollapsed ? 'collapsed' : 'expanded'}`}"
-          @click="${() => actions.toggleCollapse(collapseKey)}"
-          title="Toggle expand/collapse"
-        ></span>
-        <span class="dt-type-summary" @click="${() => actions.toggleCollapse(collapseKey)}">
-          ${() => `Array(${value.length})`}
-          ${() => (isCollapsed ? html`<span class="dt-preview"> [...]</span>` : '')}
-        </span>
-        ${() =>
-          isCollapsed
-            ? ''
-            : html`
-              <div class="tree-children">
-                ${() =>
-                  value.map((item, index) => {
-                    const childPath = `${path}[${index}]`;
-                    const itemKey = `${entityId}:${childPath}`;
-                    return html`
-                      <div class="tree-node">
-                        <span class="dt-index">${() => `${index}:`}</span>
-                        ${() => TreeValue(item, idMap, childPath, entityId)}
-                      </div>
-                    `.key(itemKey);
-                  })}
-              </div>
-            `}
-      </div>
-    `;
+    if (value.length === 0) return span({ class: 'dt-dim' }, '[]');
+    return div(
+      { class: 'tree-branch' },
+      span({
+        class: () => `tree-caret ${store.collapsedPaths[collapseKey] ? 'collapsed' : 'expanded'}`,
+        onclick: () => actions.toggleCollapse(collapseKey),
+        title: 'Toggle expand/collapse',
+      }),
+      span(
+        {
+          class: 'dt-type-summary',
+          onclick: () => actions.toggleCollapse(collapseKey),
+        },
+        `Array(${value.length})`,
+        () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ' [...]') : null),
+      ),
+      () =>
+        store.collapsedPaths[collapseKey]
+          ? null
+          : div(
+              { class: 'tree-children' },
+              value.map((item, index) => {
+                const childPath = `${path}[${index}]`;
+                return div(
+                  { class: 'tree-node' },
+                  span({ class: 'dt-index' }, `${index}:`),
+                  TreeValue(item, idMap, childPath, entityId),
+                );
+              }),
+            ),
+    );
   }
 
   const obj = /** @type {Record<string, unknown>} */ (value);
   const keys = Object.keys(obj);
-  if (keys.length === 0) return html`<span class="dt-dim">{}</span>`;
+  if (keys.length === 0) return span({ class: 'dt-dim' }, '{}');
   if (keys.length === 1 && keys[0] === '@id') return IdRef(obj['@id'], idMap);
 
-  return html`
-    <div class="tree-branch">
-      <span
-        class="${() => `tree-caret ${isCollapsed ? 'collapsed' : 'expanded'}`}"
-        @click="${() => actions.toggleCollapse(collapseKey)}"
-        title="Toggle expand/collapse"
-      ></span>
-      <span class="dt-type-summary" @click="${() => actions.toggleCollapse(collapseKey)}">
-        ${() => (obj['@type'] ? String(obj['@type']) : 'Object')}
-        ${() => (isCollapsed ? html`<span class="dt-preview"> ${previewObject(obj)}</span>` : '')}
-      </span>
-      ${() =>
-        isCollapsed
-          ? ''
-          : html`
-            <div class="tree-children">
-              ${() =>
-                keys.map((key) => {
-                  const val = obj[key];
-                  const childPath = `${path}.${key}`;
-                  const itemKey = `${entityId}:${childPath}`;
-                  const target = val !== null && typeof val === 'object' ? refTarget(val, idMap) : null;
-                  const isSpecial = key.startsWith('@');
-                  const isNested = val !== null && typeof val === 'object';
-                  return html`
-                    <div class="tree-node">
-                      <span class="${() => `dt-key ${isSpecial ? 'dt-meta-key' : ''}`}">
-                        ${() => `${key}:`}
-                      </span>
-                      ${() =>
-                        key === '@id'
-                          ? IdRef(val, idMap)
-                          : target && !Array.isArray(val) && Object.keys(/** @type {object} */ (val)).length <= 2
-                            ? EntityLink(target, String(/** @type {Record<string, unknown>} */ (val)['@id'] || target.id))
-                            : isNested
-                              ? TreeValue(val, idMap, childPath, entityId)
-                              : Scalar(val, idMap)
-                      }
-                    </div>
-                  `.key(itemKey);
-                })}
-            </div>
-          `}
-    </div>
-  `;
+  return div(
+    { class: 'tree-branch' },
+    span({
+      class: () => `tree-caret ${store.collapsedPaths[collapseKey] ? 'collapsed' : 'expanded'}`,
+      onclick: () => actions.toggleCollapse(collapseKey),
+      title: 'Toggle expand/collapse',
+    }),
+    span(
+      {
+        class: 'dt-type-summary',
+        onclick: () => actions.toggleCollapse(collapseKey),
+      },
+      obj['@type'] ? String(obj['@type']) : 'Object',
+      () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ` ${previewObject(obj)}`) : null),
+    ),
+    () =>
+      store.collapsedPaths[collapseKey]
+        ? null
+        : div(
+            { class: 'tree-children' },
+            keys.map((key) => {
+              const val = obj[key];
+              const childPath = `${path}.${key}`;
+              const target = val !== null && typeof val === 'object' ? refTarget(val, idMap) : null;
+              const isSpecial = key.startsWith('@');
+              const isNested = val !== null && typeof val === 'object';
+              return div(
+                { class: 'tree-node' },
+                span({ class: `dt-key ${isSpecial ? 'dt-meta-key' : ''}` }, `${key}:`),
+                key === '@id'
+                  ? IdRef(val, idMap)
+                  : target && !Array.isArray(val) && Object.keys(/** @type {object} */ (val)).length <= 2
+                    ? EntityLink(target, String(/** @type {Record<string, unknown>} */ (val)['@id'] || target.id))
+                    : isNested
+                      ? TreeValue(val, idMap, childPath, entityId)
+                      : Scalar(val, idMap),
+              );
+            }),
+          ),
+  );
 }
 
 function SeverityIcon(severity) {
   const kind = severity === 'error' ? 'error' : severity === 'warning' ? 'warning' : 'info';
-  return html`<span class="${`sev sev-${kind}`}" title="${kind}" aria-hidden="true"></span>`;
+  return span({ class: `sev sev-${kind}`, title: kind, 'aria-hidden': 'true' });
 }
 
-function FindingsList(all, _entityId = '') {
-  return html`
-    <div class="findings-container">
-      ${() => {
-        const findings = visibleFindings(all);
-        if (findings.length === 0) {
-          return html`
-            <div class="empty-box">
-              <span class="empty-icon">✓</span>
-              <p class="empty-title">${() => (store.findings.length ? 'No findings match this filter.' : 'All schema validations passed!')}</p>
-              <p class="empty-desc">${() => (store.findings.length ? 'Try clearing your search query.' : 'No errors or warnings detected on this page.')}</p>
-            </div>
-          `.key(`empty-findings:${store.snapshotUrl}`);
-        }
-        return html`
-          <ul class="findings">
-            ${() =>
-              findings.map((finding) => html`
-                <li class="${() => `finding severity-${finding.severity}`}">
-                  ${SeverityIcon(finding.severity)}
-                  <div class="finding-body">
-                    <div class="finding-header">
-                      <span class="finding-code">${() => finding.code}</span>
-                      ${() => (finding.path ? html`<span class="finding-path">${finding.path}</span>` : '')}
-                    </div>
-                    <div class="finding-message">${() => finding.message}</div>
-                    ${() =>
-                      finding.docsUrl && /^https?:\/\//i.test(finding.docsUrl)
-                        ? html`<a class="finding-docs" href="${finding.docsUrl}" target="_blank" rel="noopener">Official Documentation ↗</a>`
-                        : ''}
-                  </div>
-                </li>
-              `.key(`${store.snapshotUrl}:${finding.code}:${finding.entityId ?? ''}:${finding.path ?? ''}`))}
-          </ul>
-        `.key(`findings-list:${store.snapshotUrl}:${findings.length}`);
-      }}
-    </div>
-  `;
+function FindingsList(all) {
+  return div(
+    { class: 'findings-container' },
+    () => {
+      const findings = visibleFindings(all);
+      if (findings.length === 0) {
+        return div(
+          { class: 'empty-box' },
+          span({ class: 'empty-icon' }, '✓'),
+          p({ class: 'empty-title' }, store.findings.length ? 'No findings match this filter.' : 'All schema validations passed!'),
+          p({ class: 'empty-desc' }, store.findings.length ? 'Try clearing your search query.' : 'No errors or warnings detected on this page.'),
+        );
+      }
+      return ul(
+        { class: 'findings' },
+        findings.map((finding) =>
+          li(
+            { class: `finding severity-${finding.severity}` },
+            SeverityIcon(finding.severity),
+            div(
+              { class: 'finding-body' },
+              div(
+                { class: 'finding-header' },
+                span({ class: 'finding-code' }, finding.code),
+                finding.path ? span({ class: 'finding-path' }, finding.path) : null,
+              ),
+              div({ class: 'finding-message' }, finding.message),
+              finding.docsUrl && /^https?:\/\//i.test(finding.docsUrl)
+                ? a({ class: 'finding-docs', href: finding.docsUrl, target: '_blank', rel: 'noopener' }, 'Official Documentation ↗')
+                : null,
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 function GraphView() {
   const graph = buildEntityGraph();
   if (graph.nodes.length === 0) {
-    return html`
-      <div class="empty-box">
-        <span class="empty-icon">🕸️</span>
-        <p class="empty-title">No Entities to Graph</p>
-        <p class="empty-desc">No structured data entities were found on this page.</p>
-      </div>
-    `;
+    return div(
+      { class: 'empty-box' },
+      span({ class: 'empty-icon' }, '🕸️'),
+      p({ class: 'empty-title' }, 'No Entities to Graph'),
+      p({ class: 'empty-desc' }, 'No structured data entities were found on this page.'),
+    );
   }
-  return html`
-    <div class="graph-container">
-      <div class="graph-header">
-        <span class="graph-stat"><strong>${() => graph.nodes.length}</strong> Entities</span>
-        <span class="graph-stat"><strong>${() => graph.edges.length}</strong> Relationships</span>
-        <span class="graph-stat"><strong>${() => graph.orphaned.length}</strong> Isolated</span>
-      </div>
-
-      ${() =>
-        graph.edges.length > 0
-          ? html`
-            <div class="graph-section">
-              <div class="graph-section-title">Connected Entity Relationships</div>
-              <div class="graph-edges-list">
-                ${() =>
-                  graph.edges.map((edge) => html`
-                    <div class="graph-edge-card">
-                      <button
-                        type="button"
-                        class="${() => `graph-node-btn${store.selectedEntityId === edge.source.id ? ' active' : ''}`}"
-                        @click="${() => actions.selectEntity(edge.source)}"
-                      >
-                        <span class="graph-node-type">${edge.source.types.join(', ') || 'Entity'}</span>
-                        <span class="graph-node-name">${entityLabel(edge.source)}</span>
-                      </button>
-                      <div class="graph-edge-arrow">
-                        <span class="graph-edge-label">${edge.relation}</span>
-                        <span class="graph-arrow-icon">──▶</span>
-                      </div>
-                      <button
-                        type="button"
-                        class="${() => `graph-node-btn${store.selectedEntityId === edge.target.id ? ' active' : ''}`}"
-                        @click="${() => actions.selectEntity(edge.target)}"
-                      >
-                        <span class="graph-node-type">${edge.target.types.join(', ') || 'Entity'}</span>
-                        <span class="graph-node-name">${entityLabel(edge.target)}</span>
-                      </button>
-                    </div>
-                  `)}
-              </div>
-            </div>
-          `
-          : ''}
-
-      <div class="graph-section">
-        <div class="graph-section-title">All Entity Nodes</div>
-        <div class="graph-nodes-grid">
-          ${() =>
-            graph.nodes.map((node) => {
-              const isOrphan = graph.orphaned.some((o) => o.id === node.id);
-              return html`
-                <div
-                  class="${() => `graph-card${store.selectedEntityId === node.id ? ' selected' : ''}${isOrphan ? ' orphan' : ''}`}"
-                  @click="${() => actions.selectEntity(node)}"
-                >
-                  <div class="graph-card-header">
-                    <span class="entity-type">${node.types.join(', ') || 'Unknown'}</span>
-                    <span class="${`format-chip format-${node.format}`}">${node.format}</span>
-                  </div>
-                  <div class="graph-card-label">${entityLabel(node)}</div>
-                  ${isOrphan ? html`<span class="orphan-tag">Standalone</span>` : ''}
-                </div>
-              `.key(node.id);
-            })}
-        </div>
-      </div>
-    </div>
-  `;
+  return div(
+    { class: 'graph-container' },
+    div(
+      { class: 'graph-header' },
+      span({ class: 'graph-stat' }, strong(graph.nodes.length), ' Entities'),
+      span({ class: 'graph-stat' }, strong(graph.edges.length), ' Relationships'),
+      span({ class: 'graph-stat' }, strong(graph.orphaned.length), ' Isolated'),
+    ),
+    graph.edges.length > 0
+      ? div(
+          { class: 'graph-section' },
+          div({ class: 'graph-section-title' }, 'Connected Entity Relationships'),
+          div(
+            { class: 'graph-edges-list' },
+            graph.edges.map((edge) =>
+              div(
+                { class: 'graph-edge-card' },
+                button(
+                  {
+                    type: 'button',
+                    class: () => `graph-node-btn ${store.selectedEntityId === edge.source.id ? 'active' : ''}`,
+                    onclick: () => actions.selectEntity(edge.source),
+                  },
+                  span({ class: 'graph-node-type' }, edge.source.types.join(', ') || 'Entity'),
+                  span({ class: 'graph-node-name' }, entityLabel(edge.source)),
+                ),
+                div(
+                  { class: 'graph-edge-arrow' },
+                  span({ class: 'graph-edge-label' }, edge.relation),
+                  span({ class: 'graph-arrow-icon' }, '──▶'),
+                ),
+                button(
+                  {
+                    type: 'button',
+                    class: () => `graph-node-btn ${store.selectedEntityId === edge.target.id ? 'active' : ''}`,
+                    onclick: () => actions.selectEntity(edge.target),
+                  },
+                  span({ class: 'graph-node-type' }, edge.target.types.join(', ') || 'Entity'),
+                  span({ class: 'graph-node-name' }, entityLabel(edge.target)),
+                ),
+              ),
+            ),
+          ),
+        )
+      : null,
+    div(
+      { class: 'graph-section' },
+      div({ class: 'graph-section-title' }, 'All Entity Nodes'),
+      div(
+        { class: 'graph-nodes-grid' },
+        graph.nodes.map((node) => {
+          const isOrphan = graph.orphaned.some((o) => o.id === node.id);
+          return div(
+            {
+              class: () => `graph-card ${store.selectedEntityId === node.id ? 'selected' : ''} ${isOrphan ? 'orphan' : ''}`,
+              onclick: () => actions.selectEntity(node),
+            },
+            div(
+              { class: 'graph-card-header' },
+              span({ class: 'entity-type' }, node.types.join(', ') || 'Unknown'),
+              span({ class: `format-chip format-${node.format}` }, node.format),
+            ),
+            div({ class: 'graph-card-label' }, entityLabel(node)),
+            isOrphan ? span({ class: 'orphan-tag' }, 'Standalone') : null,
+          );
+        }),
+      ),
+    ),
+  );
 }
 
 function Detail() {
-  if (store.activeView === 'graph') return GraphView().key(`graph-view:${store.snapshotUrl}`);
-  if (store.activeView === 'findings') return FindingsList(true).key(`findings:${store.snapshotUrl}`);
+  if (store.activeView === 'graph') return GraphView();
+  if (store.activeView === 'findings') return FindingsList(true);
   if (store.activeView === 'serp') {
     const cards = serpCards();
     if (cards.length === 0) {
-      return html`
-        <div class="empty-box">
-          <span class="empty-icon">🌐</span>
-          <p class="empty-title">No SERP Preview Available</p>
-          <p class="empty-desc">SERP simulation is available for Product, Article, Recipe, Breadcrumb, Event, Job, ProfilePage, and LocalBusiness entities.</p>
-        </div>
-      `.key(`serp-empty:${store.snapshotUrl}`);
+      return div(
+        { class: 'empty-box' },
+        span({ class: 'empty-icon' }, '🌐'),
+        p({ class: 'empty-title' }, 'No SERP Preview Available'),
+        p({ class: 'empty-desc' }, 'SERP simulation is available for Product, Article, Recipe, Breadcrumb, Event, Job, ProfilePage, and LocalBusiness entities.'),
+      );
     }
-    return html`
-      <div class="serp-container">
-        <div class="serp-disclaimer">
-          <span>ℹ️ Simulated Google Search Preview (Non-authoritative representation of rich snippet rendering)</span>
-        </div>
-        ${() =>
-          cards.map((card) => html`
-            <article class="serp-card">
-              <div class="serp-card-top">
-                <div class="serp-cite-row">
-                  <span class="serp-kind-badge">${card.kind}</span>
-                  <span class="serp-cite">${card.cite}</span>
-                </div>
-                <button type="button" class="serp-title" @click="${() => actions.selectEntity(card.entity)}">
-                  ${card.title}
-                </button>
-              </div>
-              <div class="serp-card-body">
-                ${card.image ? html`<img class="serp-thumb" alt="" src="${card.image}" loading="lazy">` : ''}
-                <div class="serp-snippet-wrap">
-                  ${card.meta ? html`<div class="serp-meta">${card.meta}</div>` : ''}
-                  <div class="serp-snippet">${card.snippet}</div>
-                </div>
-              </div>
-            </article>
-          `.key(card.entity.id))}
-      </div>
-    `.key(`serp:${store.snapshotUrl}`);
+    return div(
+      { class: 'serp-container' },
+      div({ class: 'serp-disclaimer' }, span('ℹ️ Simulated Google Search Preview (Non-authoritative representation of rich snippet rendering)')),
+      cards.map((card) =>
+        article(
+          { class: 'serp-card' },
+          div(
+            { class: 'serp-card-top' },
+            div(
+              { class: 'serp-cite-row' },
+              span({ class: 'serp-kind-badge' }, card.kind),
+              span({ class: 'serp-cite' }, card.cite),
+            ),
+            button({ type: 'button', class: 'serp-title', onclick: () => actions.selectEntity(card.entity) }, card.title),
+          ),
+          div(
+            { class: 'serp-card-body' },
+            card.image ? img({ class: 'serp-thumb', alt: '', src: card.image, loading: 'lazy' }) : null,
+            div(
+              { class: 'serp-snippet-wrap' },
+              card.meta ? div({ class: 'serp-meta' }, card.meta) : null,
+              div({ class: 'serp-snippet' }, card.snippet),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   const entity = selectedEntity();
   if (!entity) {
-    return html`
-      <div class="empty-box">
-        <span class="empty-icon">🔍</span>
-        <p class="empty-title">Select an entity to inspect</p>
-        <p class="empty-desc">Choose an entity from the left pane to view structured properties, raw JSON, or validation findings.</p>
-      </div>
-    `.key(`empty:${store.snapshotUrl}`);
+    return div(
+      { class: 'empty-box' },
+      span({ class: 'empty-icon' }, '🔍'),
+      p({ class: 'empty-title' }, 'Select an entity to inspect'),
+      p({ class: 'empty-desc' }, 'Choose an entity from the left pane to view structured properties, raw JSON, or validation findings.'),
+    );
   }
   if (store.activeView === 'raw') {
-    return html`
-      <div class="raw-wrapper">
-        <div class="raw-toolbar">
-          <button
-            type="button"
-            class="${() => `tb-btn${store.sandboxOpen ? ' tb-btn-primary' : ''}`}"
-            @click="${() => {
+    return div(
+      { class: 'raw-wrapper' },
+      div(
+        { class: 'raw-toolbar' },
+        button(
+          {
+            type: 'button',
+            class: () => `tb-btn ${store.sandboxOpen ? 'tb-btn-primary' : ''}`,
+            onclick: () => {
               if (store.sandboxOpen) actions.closeSandbox();
               else actions.openSandbox(entity);
-            }}"
-          >
-            ${() => (store.sandboxOpen ? '✕ Close Editor' : '✏️ Edit & Test Fixes')}
-          </button>
-          ${() =>
-            store.sandboxOpen
-              ? html`
-                <button type="button" class="tb-btn" @click="${() => actions.resetSandbox(entity)}">
-                  ↩️ Reset
-                </button>
-                <button type="button" class="tb-btn tb-btn-primary" @click="${() => actions.copyJson()}">
-                  📋 Copy Fixed JSON
-                </button>
-              `
-              : html`
-                <button type="button" class="tb-btn" @click="${() => actions.copyJson()}">
-                  📋 Copy Raw
-                </button>
-              `}
-        </div>
-
-        ${() =>
+            },
+          },
+          () => (store.sandboxOpen ? '✕ Close Editor' : '✏️ Edit & Test Fixes'),
+        ),
+        () =>
           store.sandboxOpen
-            ? html`
-              <div class="sandbox-container">
-                <div class="${() => `sandbox-status-bar ${store.sandboxStatus.valid ? 'status-valid' : 'status-invalid'}`}">
-                  <span>${() => (store.sandboxStatus.valid ? '✓' : '⚠')}</span>
-                  <span>${() => store.sandboxStatus.message}</span>
-                </div>
-                <textarea
-                  class="sandbox-textarea"
-                  spellcheck="false"
-                  rows="20"
-                  value="${() => store.sandboxText}"
-                  @input="${(e) => {
-                    store.sandboxText = e.target.value;
-                    actions.validateSandbox();
-                  }}"
-                ></textarea>
-              </div>
-            `
-            : html`<pre class="raw">${() => JSON.stringify(entity.data, null, 2)}</pre>`}
-      </div>
-    `.key(`raw:${store.snapshotUrl}:${entity.id}`);
+            ? [
+                button({ type: 'button', class: 'tb-btn', onclick: () => actions.resetSandbox(entity) }, '↩️ Reset'),
+                button({ type: 'button', class: 'tb-btn tb-btn-primary', onclick: () => actions.copyJson() }, '📋 Copy Fixed JSON'),
+              ]
+            : button({ type: 'button', class: 'tb-btn', onclick: () => actions.copyJson() }, '📋 Copy Raw'),
+      ),
+      () =>
+        store.sandboxOpen
+          ? div(
+              { class: 'sandbox-container' },
+              div(
+                { class: () => `sandbox-status-bar ${store.sandboxStatus.valid ? 'status-valid' : 'status-invalid'}` },
+                span(() => (store.sandboxStatus.valid ? '✓' : '⚠')),
+                span(() => store.sandboxStatus.message),
+              ),
+              textarea({
+                class: 'sandbox-textarea',
+                spellcheck: false,
+                rows: 20,
+                value: () => store.sandboxText,
+                oninput: (e) => {
+                  store.sandboxText = e.target.value;
+                  actions.validateSandbox();
+                },
+              }),
+            )
+          : pre({ class: 'raw' }, JSON.stringify(entity.data, null, 2)),
+    );
   }
-  return html`
-    <div class="tree-root">
-      ${() => TreeValue(entity.data, entityIdIndex(), 'root', entity.id)}
-    </div>
-  `.key(`tree:${store.snapshotUrl}:${entity.id}`);
+
+  return div(
+    { class: 'tree-root' },
+    TreeValue(entity.data, entityIdIndex(), 'root', entity.id),
+  );
 }
 
-export const PanelApp = () => html`
-  <div class="${() => `app theme-${store.theme}`}" data-theme="${() => store.theme}" @click="${() => actions.closeExportMenu()}">
-    <header class="toolbar">
-      <div class="score-card" title="${() => `Quality Score: ${store.score?.total ?? '—'}/100 (${scoreLabel()})`}">
-        <div
-          class="${() => `score-ring label-${store.score?.label || 'none'}`}"
-          style="${() => `--score:${store.score?.total ?? 0}`}"
-        >
-          <span class="score-val">${() => (store.score ? String(store.score.total) : '—')}</span>
-        </div>
-        <div class="score-details">
-          <div class="score-title-row">
-            <span class="score-grade">${() => scoreLabel()}</span>
-          </div>
-          <div class="score-badges">
-            <span class="badge-err">${() => `${store.score?.errorCount ?? 0} errors`}</span>
-            <span class="badge-warn">${() => `${store.score?.warningCount ?? 0} warnings`}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="toolbar-divider"></div>
-
-      <div class="action-group">
-        <button
-          type="button"
-          class="tb-btn tb-btn-primary"
-          title="Re-analyze inspected page"
-          @click="${(e) => { e.stopPropagation(); actions.refresh(); }}"
-        >
-          <span class="tb-icon">↻</span> Refresh
-        </button>
-
-        <button
-          type="button"
-          class="tb-btn"
-          id="btn-inspect"
-          title="Reveal source node in Elements panel"
-          @click="${(e) => { e.stopPropagation(); actions.inspectSelected(); }}"
-        >
-          <span class="tb-icon">🎯</span> Inspect in Elements
-        </button>
-
-        <div class="dropdown-wrap" @click="${(e) => e.stopPropagation()}">
-          <button
-            type="button"
-            class="${() => `tb-btn tb-btn-dropdown${store.exportMenuOpen ? ' active' : ''}`}"
-            @click="${() => actions.toggleExportMenu()}"
-            title="Export schema or agent bundles"
-          >
-            <span class="tb-icon">📋</span> Export <span class="caret">▾</span>
-          </button>
-
-          ${() =>
+export const PanelApp = () => {
+  return div(
+    {
+      class: () => `app theme-${store.theme}`,
+      'data-theme': () => store.theme,
+      onclick: () => actions.closeExportMenu(),
+    },
+    header(
+      { class: 'toolbar' },
+      div(
+        {
+          class: 'score-card',
+          title: () => `Quality Score: ${store.score?.total ?? '—'}/100 (${scoreLabel()})`,
+        },
+        div(
+          {
+            class: () => `score-ring label-${store.score?.label || 'none'}`,
+            style: () => `--score:${store.score?.total ?? 0}`,
+          },
+          span({ class: 'score-val' }, () => (store.score ? String(store.score.total) : '—')),
+        ),
+        div(
+          { class: 'score-details' },
+          div({ class: 'score-title-row' }, span({ class: 'score-grade' }, () => scoreLabel())),
+          div(
+            { class: 'score-badges' },
+            span({ class: 'badge-err' }, () => `${store.score?.errorCount ?? 0} errors`),
+            span({ class: 'badge-warn' }, () => `${store.score?.warningCount ?? 0} warnings`),
+          ),
+        ),
+      ),
+      div({ class: 'toolbar-divider' }),
+      div(
+        { class: 'action-group' },
+        button(
+          {
+            type: 'button',
+            class: 'tb-btn tb-btn-primary',
+            title: 'Re-analyze inspected page',
+            onclick: (e) => {
+              e.stopPropagation();
+              actions.refresh();
+            },
+          },
+          span({ class: 'tb-icon' }, '↻'),
+          ' Refresh',
+        ),
+        button(
+          {
+            type: 'button',
+            class: 'tb-btn',
+            id: 'btn-inspect',
+            title: 'Reveal source node in Elements panel',
+            onclick: (e) => {
+              e.stopPropagation();
+              actions.inspectSelected();
+            },
+          },
+          span({ class: 'tb-icon' }, '🎯'),
+          ' Inspect in Elements',
+        ),
+        div(
+          {
+            class: 'dropdown-wrap',
+            onclick: (e) => e.stopPropagation(),
+          },
+          button(
+            {
+              type: 'button',
+              class: () => `tb-btn tb-btn-dropdown ${store.exportMenuOpen ? 'active' : ''}`,
+              onclick: () => actions.toggleExportMenu(),
+              title: 'Export schema or agent bundles',
+            },
+            span({ class: 'tb-icon' }, '📋'),
+            ' Export ',
+            span({ class: 'caret' }, '▾'),
+          ),
+          () =>
             store.exportMenuOpen
-              ? html`
-                <div class="dropdown-menu">
-                  <button type="button" class="menu-item" @click="${() => { actions.copyJson(); actions.closeExportMenu(); }}">
-                    <span>Copy JSON</span> <small>Selected entity</small>
-                  </button>
-                  <button type="button" class="menu-item" @click="${() => { actions.copyScript(); actions.closeExportMenu(); }}">
-                    <span>Copy &lt;script&gt; Tag</span> <small>JSON-LD</small>
-                  </button>
-                  <div class="menu-sep"></div>
-                  <button type="button" class="menu-item" @click="${() => { actions.copyBundle(); actions.closeExportMenu(); }}">
-                    <span>Copy Agent Bundle</span> <small>AI JSON</small>
-                  </button>
-                  <button type="button" class="menu-item" @click="${() => { actions.copyMarkdown(); actions.closeExportMenu(); }}">
-                    <span>Copy Agent Markdown</span> <small>Prompt ready</small>
-                  </button>
-                  <button type="button" class="menu-item" @click="${() => { actions.copyAiPrompt(); actions.closeExportMenu(); }}">
-                    <span>Copy for AI Prompt</span> <small>LLM / RAG prompt</small>
-                  </button>
-                  <div class="menu-sep"></div>
-                  <button type="button" class="menu-item" @click="${() => { actions.downloadJson(); actions.closeExportMenu(); }}">
-                    <span>Download Report (.json)</span>
-                  </button>
-                </div>
-              `
-              : ''}
-        </div>
-      </div>
-
-      <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input
-          type="search"
-          class="tb-search"
-          placeholder="Filter entities, properties, findings…"
-          autocomplete="off"
-          spellcheck="false"
-          value="${() => store.query}"
-          @input="${(event) => { store.query = event.target.value; }}"
-        >
-        ${() =>
+              ? div(
+                  { class: 'dropdown-menu' },
+                  button(
+                    {
+                      type: 'button',
+                      class: 'menu-item',
+                      onclick: () => {
+                        actions.copyJson();
+                        actions.closeExportMenu();
+                      },
+                    },
+                    span('Copy JSON'),
+                    small('Selected entity'),
+                  ),
+                  button(
+                    {
+                      type: 'button',
+                      class: 'menu-item',
+                      onclick: () => {
+                        actions.copyScript();
+                        actions.closeExportMenu();
+                      },
+                    },
+                    span('Copy <script> Tag'),
+                    small('JSON-LD'),
+                  ),
+                  div({ class: 'menu-sep' }),
+                  button(
+                    {
+                      type: 'button',
+                      class: 'menu-item',
+                      onclick: () => {
+                        actions.copyBundle();
+                        actions.closeExportMenu();
+                      },
+                    },
+                    span('Copy Agent Bundle'),
+                    small('AI JSON'),
+                  ),
+                  button(
+                    {
+                      type: 'button',
+                      class: 'menu-item',
+                      onclick: () => {
+                        actions.copyMarkdown();
+                        actions.closeExportMenu();
+                      },
+                    },
+                    span('Copy Agent Markdown'),
+                    small('Prompt ready'),
+                  ),
+                  button(
+                    {
+                      type: 'button',
+                      class: 'menu-item',
+                      onclick: () => {
+                        actions.copyAiPrompt();
+                        actions.closeExportMenu();
+                      },
+                    },
+                    span('Copy for AI Prompt'),
+                    small('LLM / RAG prompt'),
+                  ),
+                  div({ class: 'menu-sep' }),
+                  button(
+                    {
+                      type: 'button',
+                      class: 'menu-item',
+                      onclick: () => {
+                        actions.downloadJson();
+                        actions.closeExportMenu();
+                      },
+                    },
+                    span('Download Report (.json)'),
+                  ),
+                )
+              : null,
+        ),
+      ),
+      div(
+        { class: 'search-wrap' },
+        span({ class: 'search-icon' }, '🔍'),
+        input({
+          type: 'search',
+          class: 'tb-search',
+          placeholder: 'Filter entities, properties, findings…',
+          autocomplete: 'off',
+          spellcheck: false,
+          value: () => store.query,
+          oninput: (e) => {
+            store.query = e.target.value;
+          },
+        }),
+        () =>
           store.query
-            ? html`
-              <button
-                type="button"
-                class="search-clear"
-                title="Clear filter"
-                @click="${() => { store.query = ''; }}"
-              >✕</button>
-            `
-            : ''}
-      </div>
-
-      <div class="external-group">
-        <button
-          type="button"
-          class="tb-btn tb-btn-link"
-          title="Open current page in Google Rich Results Test"
-          @click="${(e) => { e.stopPropagation(); actions.openRichResults(); }}"
-        >
-          Google Rich Results ↗
-        </button>
-        <button
-          type="button"
-          class="tb-btn tb-btn-link"
-          title="Open current page in Schema.org Validator"
-          @click="${(e) => { e.stopPropagation(); actions.openSchemaValidator(); }}"
-        >
-          Schema.org ↗
-        </button>
-      </div>
-    </header>
-
-    <main class="main">
-      <section class="pane entities-pane">
-        <div class="pane-header">
-          <span class="pane-title">Entities</span>
-          <span class="pill-badge">${() => store.entities.length}</span>
-        </div>
-
-        ${() => {
+            ? button(
+                {
+                  type: 'button',
+                  class: 'search-clear',
+                  title: 'Clear filter',
+                  onclick: () => {
+                    store.query = '';
+                  },
+                },
+                '✕',
+              )
+            : null,
+      ),
+      div(
+        { class: 'external-group' },
+        button(
+          {
+            type: 'button',
+            class: 'tb-btn tb-btn-link',
+            title: 'Open current page in Google Rich Results Test',
+            onclick: (e) => {
+              e.stopPropagation();
+              actions.openRichResults();
+            },
+          },
+          'Google Rich Results ↗',
+        ),
+        button(
+          {
+            type: 'button',
+            class: 'tb-btn tb-btn-link',
+            title: 'Open current page in Schema.org Validator',
+            onclick: (e) => {
+              e.stopPropagation();
+              actions.openSchemaValidator();
+            },
+          },
+          'Schema.org ↗',
+        ),
+      ),
+    ),
+    main(
+      { class: 'main' },
+      section(
+        { class: 'pane entities-pane' },
+        div(
+          { class: 'pane-header' },
+          span({ class: 'pane-title' }, 'Entities'),
+          span({ class: 'pill-badge' }, () => store.entities.length),
+        ),
+        () => {
           const entities = visibleEntities();
           if (store.entities.length === 0) {
-            return html`<p class="empty-list">No structured data entities found on this page.</p>`.key(`empty:${store.snapshotUrl}`);
+            return p({ class: 'empty-list' }, 'No structured data entities found on this page.');
           }
           if (entities.length === 0) {
-            return html`<p class="empty-list">No entities match "${() => store.query}".</p>`.key(`empty-filter:${store.snapshotUrl}`);
+            return p({ class: 'empty-list' }, `No entities match "${store.query}".`);
           }
-          return html`
-            <ul class="entity-list">
-              ${() =>
-                entities.map((entity) => {
-                  return html`
-                    <li
-                      class="${() => `entity-item${store.selectedEntityId === entity.id ? ' selected' : ''}`}"
-                      title="Click to select · Alt-click to inspect in Elements"
-                      @click="${(event) => actions.selectEntity(entity, { inspect: event.altKey })}"
-                      @mouseenter="${() => actions.highlightEntity(entity)}"
-                    >
-                      <div class="entity-row-top">
-                        <span class="entity-type">${() => entity.types.join(', ') || 'Unknown'}</span>
-                        <span class="${() => `format-chip format-${entity.format}`}">${() => entity.format}</span>
-                      </div>
-                      ${() => {
-                        const label = entityLabel(entity);
-                        return label ? html`<div class="entity-label" title="${() => label}">${() => label}</div>` : '';
-                      }}
-                    </li>
-                  `.key(`${store.snapshotUrl}:${entity.id}`);
-                })}
-            </ul>
-          `.key(`list:${store.snapshotUrl}:${entities.length}`);
-        }}
-      </section>
-
-      <section class="pane detail-pane">
-        <div class="view-tabs">
-          ${VIEWS.map(([id, label]) => html`
-            <button
-              type="button"
-              class="${() => `tab${store.activeView === id ? ' active' : ''}`}"
-              @click="${() => { store.activeView = id; }}"
-            >
-              ${label}
-              ${() => {
-                if (id !== 'findings') return '';
+          return ul(
+            { class: 'entity-list' },
+            entities.map((entity) => {
+              const label = entityLabel(entity);
+              return li(
+                {
+                  class: () => `entity-item ${store.selectedEntityId === entity.id ? 'selected' : ''}`,
+                  title: 'Click to select · Alt-click to inspect in Elements',
+                  onclick: (event) => actions.selectEntity(entity, { inspect: event.altKey }),
+                  onmouseenter: () => actions.highlightEntity(entity),
+                },
+                div(
+                  { class: 'entity-row-top' },
+                  span({ class: 'entity-type' }, entity.types.join(', ') || 'Unknown'),
+                  span({ class: `format-chip format-${entity.format}` }, entity.format),
+                ),
+                label ? div({ class: 'entity-label', title: label }, label) : null,
+              );
+            }),
+          );
+        },
+      ),
+      section(
+        { class: 'pane detail-pane' },
+        div(
+          { class: 'view-tabs' },
+          VIEWS.map(([id, label]) =>
+            button(
+              {
+                type: 'button',
+                class: () => `tab ${store.activeView === id ? 'active' : ''}`,
+                onclick: () => {
+                  store.activeView = id;
+                },
+              },
+              label,
+              () => {
+                if (id !== 'findings') return null;
                 const count = store.findings.length;
-                if (count === 0) return '';
+                if (count === 0) return null;
                 const hasError = store.findings.some((f) => f.severity === 'error');
                 const hasWarning = store.findings.some((f) => f.severity === 'warning');
                 const kind = hasError ? 'error' : hasWarning ? 'warning' : 'info';
-                return html`<span class="${`tab-badge tab-badge-${kind}`}">${count}</span>`;
-              }}
-            </button>
-          `.key(id))}
-        </div>
-        <div class="view-content">
-          ${() => Detail()}
-        </div>
-      </section>
-    </main>
-
-    <footer class="${() => `status-bar${store.statusError ? ' status-error' : ''}`}" role="status">
-      <span class="status-dot">●</span>
-      <span class="status-text">${() => store.status || 'Ready'}</span>
-      <span class="status-meta">${() => (store.snapshotUrl ? store.snapshotUrl : '')}</span>
-    </footer>
-  </div>
-`;
+                return span({ class: `tab-badge tab-badge-${kind}` }, count);
+              },
+            ),
+          ),
+        ),
+        div(
+          { class: 'view-content' },
+          () => {
+            // Read snapshotUrl to ensure full re-render on navigation
+            const _url = store.snapshotUrl;
+            return Detail();
+          },
+        ),
+      ),
+    ),
+    footer(
+      {
+        class: () => `status-bar ${store.statusError ? 'status-error' : ''}`,
+        role: 'status',
+      },
+      span({ class: 'status-dot' }, '●'),
+      span({ class: 'status-text' }, () => store.status || 'Ready'),
+      span({ class: 'status-meta' }, () => (store.snapshotUrl ? store.snapshotUrl : '')),
+    ),
+  );
+};
 
 export function mountPanel(root) {
-  PanelApp()(root);
+  root.replaceChildren();
+  van.add(root, PanelApp());
 }

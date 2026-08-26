@@ -2,12 +2,13 @@
   "name": "schema-devtools",
   "private": true,
   "type": "module",
-  "description": "Local tooling for Schema DevTools. Runtime UI uses the vendored ArrowJS copy in vendor/.",
+  "description": "Local tooling for Schema DevTools. Runtime UI uses vendored VanJS and VanX in vendor/.",
   "scripts": {
     "bundle": "node scripts/bundle-engine.mjs",
     "smoke": "node scripts/smoke-engine.mjs && node scripts/smoke-panel.mjs"
   },
   "dependencies": {
-    "@arrow-js/core": "1.0.6"
+    "vanjs-core": "1.6.1",
+    "vanjs-ext": "0.6.3"
   }
 }

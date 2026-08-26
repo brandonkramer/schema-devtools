@@ -1,8 +1,9 @@
-import { html, reactive } from '../vendor/arrow.js';
+import van from '../vendor/van.js';
+import vanX from '../vendor/van-x.js';
 
 /** @typedef {import('../src/types.js').Finding} Finding */
 
-export const store = reactive({
+export const store = vanX.reactive({
   theme: 'default',
   empty: true,
   message: 'No schema on this node',
@@ -12,51 +13,62 @@ export const store = reactive({
   findings: /** @type {Finding[]} */ ([]),
 });
 
+const { div, span, p, h2, h3, dl, dt, dd, section, ul, li } = van.tags;
+
 function SeverityIcon(severity) {
   const kind = severity === 'error' ? 'error' : severity === 'warning' ? 'warning' : 'info';
-  return html`<span class="${`sev sev-${kind}`}" title="${kind}" aria-hidden="true"></span>`;
+  return span({ class: `sev sev-${kind}`, title: kind, 'aria-hidden': 'true' });
 }
 
-export const SidebarApp = () => html`
-  <div class="sidebar" data-theme="${() => store.theme}">
-    ${() => store.empty
-      ? html`<p class="empty">${store.message}</p>`
-      : html`
-        <div>
-          <div class="type-row">
-            <span class="format-chip">${store.format}</span>
-            <h2 class="type-name">${store.types}</h2>
-          </div>
-          <section>
-            <h3 class="section-label">Key properties</h3>
-            <dl class="props">
-              ${() => store.properties.map((prop) => html`
-                <dt>${prop.key}</dt>
-                <dd title="${prop.value}">${prop.value}</dd>
-              `.key(prop.key))}
-            </dl>
-          </section>
-          ${() => store.findings.length === 0 ? '' : html`
-            <section>
-              <h3 class="section-label">Findings</h3>
-              <ul class="findings">
-                ${() => store.findings.map((finding) => html`
-                  <li class="${`finding severity-${finding.severity}`}">
-                    ${() => SeverityIcon(finding.severity)}
-                    <div>
-                      <span class="finding-code">${finding.code}</span>
-                      <span class="finding-message">${finding.message}</span>
-                    </div>
-                  </li>
-                `.key(`${finding.code}:${finding.entityId ?? ''}`))}
-              </ul>
-            </section>
-          `}
-        </div>
-      `}
-  </div>
-`;
+export const SidebarApp = () => {
+  return div(
+    { class: 'sidebar', 'data-theme': () => store.theme },
+    () => {
+      if (store.empty) {
+        return p({ class: 'empty' }, () => store.message);
+      }
+      return div(
+        div(
+          { class: 'type-row' },
+          span({ class: 'format-chip' }, () => store.format),
+          h2({ class: 'type-name' }, () => store.types),
+        ),
+        section(
+          h3({ class: 'section-label' }, 'Key properties'),
+          dl(
+            { class: 'props' },
+            () =>
+              store.properties.map((prop) => [
+                dt(prop.key),
+                dd({ title: prop.value }, prop.value),
+              ]),
+          ),
+        ),
+        () => {
+          if (store.findings.length === 0) return null;
+          return section(
+            h3({ class: 'section-label' }, 'Findings'),
+            ul(
+              { class: 'findings' },
+              store.findings.map((finding) =>
+                li(
+                  { class: `finding severity-${finding.severity}` },
+                  SeverityIcon(finding.severity),
+                  div(
+                    span({ class: 'finding-code' }, finding.code),
+                    span({ class: 'finding-message' }, finding.message),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+};
 
 export function mountSidebar(root) {
-  SidebarApp()(root);
+  root.replaceChildren();
+  van.add(root, SidebarApp());
 }

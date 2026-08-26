@@ -1,8 +1,8 @@
-import { reactive } from '../vendor/arrow.js';
+import vanX from '../vendor/van-x.js';
 
 /** @typedef {import('../src/types.js').Finding} Finding */
 
-export const store = reactive({
+export const store = vanX.reactive({
   theme: 'default',
   query: '',
   activeView: /** @type {'tree' | 'raw' | 'findings' | 'serp' | 'graph'} */ ('tree'),
