@@ -8,7 +8,7 @@ const steps = [
   {
     name: 'Security & Dependency Guardrails',
     cmd: 'git',
-    args: ['grep', '\\.agents', '--', ':!.agents', ':!*.md', ':!.cursor', ':!.gitignore'],
+    args: ['grep', '\\.agents', '--', ':!.agents', ':!*.md', ':!.cursor', ':!.gitignore', ':!scripts/test.mjs'],
     allowEmpty: true,
   },
 ];
