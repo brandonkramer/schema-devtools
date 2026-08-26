@@ -15,7 +15,7 @@ All analysis runs **100% locally in your browser** — zero host permissions, ze
   - **Tree View** — Interactive, collapsible tree view with syntax color-coding and `@id` graph navigation links.
   - **Raw JSON Sandbox** — In-panel interactive JSON editor (`✏️ Edit & Test Fixes`) with live syntax checking and real-time score recalculation.
   - **Findings View** — Filterable list of validation findings with direct documentation links.
-  - **SERP Preview** — Google Search rich preview simulations for `Product`, `Recipe`, `Article`, `Event`, `Job`, `ProfilePage`, and `LocalBusiness` / `Restaurant` / `Store`.
+  - **SERP Preview** — Google Search rich snippet simulations for `Product`, `Recipe`, `Review & Rating`, `Article`, `VideoObject`, `Event`, `JobPosting`, `ProfilePage`, `BreadcrumbList`, and `LocalBusiness` / `Restaurant` / `Store`.
   - **Knowledge Graph** — Visual entity relationship graph showing `@id` connections and orphaned standalone entities.
 - ⚡ **Live SPA & Mutation Updates** — Automatically detects dynamic schema changes, client-side route changes (Next.js, Nuxt, Shopify, React), and DOM mutations.
 - 🎯 **In-Page DOM Highlighting** — Hovering or clicking an entity outlines its corresponding visual DOM node on the live webpage.

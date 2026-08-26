@@ -6,6 +6,31 @@
 
 /** @typedef {import('../types.js').TypeRule} TypeRule */
 
+/** Schema.org LocalBusiness subtypes supported by Google's Local Business guide. */
+export const LOCAL_BUSINESS_TYPES = new Set([
+  'LocalBusiness', 'AccountingService', 'AnimalShelter', 'Attorney', 'AutomotiveBusiness',
+  'Bakery', 'BarOrPub', 'BeautySalon', 'BedAndBreakfast', 'BikeStore', 'BookStore',
+  'BowlingAlley', 'Brewery', 'CafeOrCoffeeShop', 'Campground', 'Casino', 'ChildCare',
+  'ClothingStore', 'ComputerStore', 'ConvenienceStore', 'DaySpa', 'Dentist',
+  'DepartmentStore', 'Distillery', 'DryCleaningOrLaundry', 'Electrician',
+  'EmergencyService', 'EmploymentAgency', 'EntertainmentBusiness', 'ExerciseGym',
+  'FastFoodRestaurant', 'FinancialService', 'Florist', 'FoodEstablishment',
+  'FurnitureStore', 'GardenStore', 'GasStation', 'GeneralContractor', 'GolfCourse',
+  'GovernmentOffice', 'GroceryStore', 'HardwareStore', 'HealthAndBeautyBusiness',
+  'HealthClub', 'HobbyShop', 'HomeAndConstructionBusiness', 'Hostel', 'Hotel',
+  'HVACBusiness', 'IceCreamShop', 'InsuranceAgency', 'InternetCafe', 'JewelryStore',
+  'LegalService', 'Library', 'LiquorStore', 'LodgingBusiness', 'Locksmith',
+  'MedicalBusiness', 'MensClothingStore', 'MiddleSchool', 'Motel', 'MotorcycleDealer',
+  'MovieTheater', 'MovingCompany', 'MusicStore', 'NightClub', 'Notary',
+  'OfficeEquipmentStore', 'Optician', 'OutletStore', 'PawnShop', 'PetStore', 'Pharmacy',
+  'Plumber', 'PoliceStation', 'PostOffice', 'Preschool', 'ProfessionalService',
+  'RadioStation', 'RealEstateAgent', 'RecyclingCenter', 'Resort', 'Restaurant',
+  'RoofingContractor', 'SelfStorage', 'ShoeStore', 'ShoppingCenter', 'SkiResort',
+  'SportingGoodsStore', 'SportsActivityLocation', 'Store', 'TattooParlor',
+  'TelevisionStation', 'TireShop', 'TouristAttraction', 'TouristInformationCenter',
+  'ToyStore', 'TravelAgency', 'WholesaleStore',
+]);
+
 /** @type {TypeRule[]} */
 export const RICH_RESULT_RULES = [
   {

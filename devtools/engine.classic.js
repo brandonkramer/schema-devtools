@@ -448,6 +448,31 @@ const EXTRACT_SOURCE = `(() => {
 
 /** @typedef {import('../types.js').TypeRule} TypeRule */
 
+/** Schema.org LocalBusiness subtypes supported by Google's Local Business guide. */
+const LOCAL_BUSINESS_TYPES = new Set([
+  'LocalBusiness', 'AccountingService', 'AnimalShelter', 'Attorney', 'AutomotiveBusiness',
+  'Bakery', 'BarOrPub', 'BeautySalon', 'BedAndBreakfast', 'BikeStore', 'BookStore',
+  'BowlingAlley', 'Brewery', 'CafeOrCoffeeShop', 'Campground', 'Casino', 'ChildCare',
+  'ClothingStore', 'ComputerStore', 'ConvenienceStore', 'DaySpa', 'Dentist',
+  'DepartmentStore', 'Distillery', 'DryCleaningOrLaundry', 'Electrician',
+  'EmergencyService', 'EmploymentAgency', 'EntertainmentBusiness', 'ExerciseGym',
+  'FastFoodRestaurant', 'FinancialService', 'Florist', 'FoodEstablishment',
+  'FurnitureStore', 'GardenStore', 'GasStation', 'GeneralContractor', 'GolfCourse',
+  'GovernmentOffice', 'GroceryStore', 'HardwareStore', 'HealthAndBeautyBusiness',
+  'HealthClub', 'HobbyShop', 'HomeAndConstructionBusiness', 'Hostel', 'Hotel',
+  'HVACBusiness', 'IceCreamShop', 'InsuranceAgency', 'InternetCafe', 'JewelryStore',
+  'LegalService', 'Library', 'LiquorStore', 'LodgingBusiness', 'Locksmith',
+  'MedicalBusiness', 'MensClothingStore', 'MiddleSchool', 'Motel', 'MotorcycleDealer',
+  'MovieTheater', 'MovingCompany', 'MusicStore', 'NightClub', 'Notary',
+  'OfficeEquipmentStore', 'Optician', 'OutletStore', 'PawnShop', 'PetStore', 'Pharmacy',
+  'Plumber', 'PoliceStation', 'PostOffice', 'Preschool', 'ProfessionalService',
+  'RadioStation', 'RealEstateAgent', 'RecyclingCenter', 'Resort', 'Restaurant',
+  'RoofingContractor', 'SelfStorage', 'ShoeStore', 'ShoppingCenter', 'SkiResort',
+  'SportingGoodsStore', 'SportsActivityLocation', 'Store', 'TattooParlor',
+  'TelevisionStation', 'TireShop', 'TouristAttraction', 'TouristInformationCenter',
+  'ToyStore', 'TravelAgency', 'WholesaleStore',
+]);
+
 /** @type {TypeRule[]} */
 const RICH_RESULT_RULES = [
   {
@@ -1099,16 +1124,6 @@ function readName(val) {
   }
   return null;
 }
-
-const LOCAL_BUSINESS_TYPES = new Set([
-  'LocalBusiness', 'AnimalShelter', 'AutomotiveBusiness', 'ChildCare', 'Dentist',
-  'DryCleaningOrLaundry', 'EmergencyService', 'EmploymentAgency', 'EntertainmentBusiness',
-  'FinancialService', 'FoodEstablishment', 'GovernmentOffice', 'HealthAndBeautyBusiness',
-  'HomeAndConstructionBusiness', 'InternetCafe', 'LegalService', 'Library', 'LodgingBusiness',
-  'MedicalBusiness', 'ProfessionalService', 'RadioStation', 'RealEstateAgent', 'RecyclingCenter',
-  'SelfStorage', 'ShoppingCenter', 'SportsActivityLocation', 'Store', 'TelevisionStation',
-  'TouristInformationCenter', 'TravelAgency', 'Restaurant',
-]);
 
 function isLocalBusiness(types) {
   return types.some((type) => LOCAL_BUSINESS_TYPES.has(type));
@@ -1894,14 +1909,9 @@ function validate(snapshot, entities) {
 /** @typedef {import('./types.js').ScoreResult} ScoreResult */
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
-const SCORE_LOCAL_BUSINESS_TYPES = new Set([
-  'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'AutomotiveBusiness',
-  'FinancialService', 'LodgingBusiness', 'MedicalBusiness', 'ProfessionalService',
-]);
-
 function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
-    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => SCORE_LOCAL_BUSINESS_TYPES.has(type)));
+    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)));
   });
 }
 

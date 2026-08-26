@@ -5,6 +5,7 @@
 
 import {
   RICH_RESULT_RULES,
+  LOCAL_BUSINESS_TYPES,
   DEPRECATED_TYPES,
   FAQ_GOOGLE_STATUS,
   hasProperty,
@@ -39,16 +40,6 @@ function readName(val) {
   }
   return null;
 }
-
-const LOCAL_BUSINESS_TYPES = new Set([
-  'LocalBusiness', 'AnimalShelter', 'AutomotiveBusiness', 'ChildCare', 'Dentist',
-  'DryCleaningOrLaundry', 'EmergencyService', 'EmploymentAgency', 'EntertainmentBusiness',
-  'FinancialService', 'FoodEstablishment', 'GovernmentOffice', 'HealthAndBeautyBusiness',
-  'HomeAndConstructionBusiness', 'InternetCafe', 'LegalService', 'Library', 'LodgingBusiness',
-  'MedicalBusiness', 'ProfessionalService', 'RadioStation', 'RealEstateAgent', 'RecyclingCenter',
-  'SelfStorage', 'ShoppingCenter', 'SportsActivityLocation', 'Store', 'TelevisionStation',
-  'TouristInformationCenter', 'TravelAgency', 'Restaurant',
-]);
 
 function isLocalBusiness(types) {
   return types.some((type) => LOCAL_BUSINESS_TYPES.has(type));

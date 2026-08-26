@@ -8,16 +8,11 @@
 /** @typedef {import('./types.js').ScoreResult} ScoreResult */
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
-import { RICH_RESULT_RULES } from './catalog/rich-results.js';
-
-const SCORE_LOCAL_BUSINESS_TYPES = new Set([
-  'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'AutomotiveBusiness',
-  'FinancialService', 'LodgingBusiness', 'MedicalBusiness', 'ProfessionalService',
-]);
+import { LOCAL_BUSINESS_TYPES, RICH_RESULT_RULES } from './catalog/rich-results.js';
 
 function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
-    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => SCORE_LOCAL_BUSINESS_TYPES.has(type)));
+    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)));
   });
 }
 

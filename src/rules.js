@@ -4,7 +4,7 @@
  * @file
  */
 
-import { RICH_RESULT_RULES } from './catalog/rich-results.js';
+import { LOCAL_BUSINESS_TYPES, RICH_RESULT_RULES } from './catalog/rich-results.js';
 import { DEPRECATED_TYPES, FAQ_GOOGLE_STATUS } from './catalog/deprecations.js';
 import {
   matchRuleInCatalog,
@@ -20,6 +20,7 @@ import {
 
 export {
   RICH_RESULT_RULES,
+  LOCAL_BUSINESS_TYPES,
   DEPRECATED_TYPES,
   FAQ_GOOGLE_STATUS,
   hasProperty,
