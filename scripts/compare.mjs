@@ -24,24 +24,58 @@ async function querySMV(html) {
   }
 }
 
-async function compareSnapshot(name, url, canonical, rawJsonBlocks) {
+async function compareSnapshot(name, url, canonical, entitiesList) {
   console.log(`\n============================================================`);
   console.log(`🔬 Comparing: ${name}`);
   console.log(`============================================================`);
 
-  const html = `<!DOCTYPE html><html><head>${rawJsonBlocks
-    .map((b) => `<script type="application/ld+json">${typeof b === 'string' ? b : JSON.stringify(b)}</script>`)
-    .join('')}</head><body></body></html>`;
+  const jsonldBlocks = entitiesList.filter((e) => !e.format || e.format === 'jsonld');
+  const microdataNodes = entitiesList.filter((e) => e.format === 'microdata');
+  const rdfaNodes = entitiesList.filter((e) => e.format === 'rdfa');
+
+  let htmlBody = '';
+
+  const jsonldScripts = jsonldBlocks.map((e) => `<script type="application/ld+json">${JSON.stringify(e.data || e)}</script>`).join('\n');
+
+  const microdataHtml = microdataNodes.map((e) => {
+    const type = e.types?.[0] || 'Thing';
+    const props = Object.entries(e.data || {})
+      .filter(([k]) => !k.startsWith('@'))
+      .map(([k, v]) => `<span itemprop="${k}">${v}</span>`)
+      .join('\n');
+    return `<div itemscope itemtype="https://schema.org/${type}">\n${props}\n</div>`;
+  }).join('\n');
+
+  const rdfaHtml = rdfaNodes.map((e) => {
+    const type = e.types?.[0] || 'Thing';
+    const props = Object.entries(e.data || {})
+      .filter(([k]) => !k.startsWith('@'))
+      .map(([k, v]) => `<span property="${k}">${v}</span>`)
+      .join('\n');
+    return `<div vocab="https://schema.org/" typeof="${type}">\n${props}\n</div>`;
+  }).join('\n');
+
+  const html = `<!DOCTYPE html><html><head>${jsonldScripts}</head><body>${microdataHtml}\n${rdfaHtml}</body></html>`;
 
   const snapshot = {
     url,
     canonical,
-    jsonld: rawJsonBlocks.map((b, index) => {
-      const parsed = typeof b === 'string' ? JSON.parse(b) : b;
+    jsonld: jsonldBlocks.map((e, index) => {
+      const parsed = e.data || e;
       return { index, raw: JSON.stringify(parsed), parsed, parseError: null, selector: `jsonld:${index}` };
     }),
-    microdata: [],
-    rdfa: [],
+    microdata: microdataNodes.map((e, index) => ({
+      format: 'microdata',
+      type: e.types || ['Thing'],
+      properties: e.data || {},
+      selector: `div[itemscope]:nth-of-type(${index + 1})`,
+    })),
+    rdfa: rdfaNodes.map((e, index) => ({
+      format: 'rdfa',
+      type: e.types || ['Thing'],
+      properties: e.data || {},
+      selector: `div[typeof]:nth-of-type(${index + 1})`,
+    })),
   };
 
   // 1. Local Schema DevTools Engine
@@ -88,7 +122,7 @@ async function run() {
     await compareSnapshot(target, target, target, rawBlocks);
   } else {
     for (const [key, fixture] of Object.entries(FIXTURES)) {
-      await compareSnapshot(fixture.name, fixture.url, fixture.canonical, fixture.entities.map((e) => e.data));
+      await compareSnapshot(fixture.name, fixture.url, fixture.canonical, fixture.entities);
     }
   }
   console.log('\n============================================================\n');

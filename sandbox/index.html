@@ -84,10 +84,27 @@
     <div class="dev-controls">
       <label for="fixture-select">Fixture:</label>
       <select id="fixture-select" class="dev-select">
-        <option value="e-commerce">E-Commerce Product</option>
-        <option value="article">Multi-Author Article</option>
-        <option value="restaurant">Restaurant & LocalBusiness</option>
-        <option value="deprecated">Deprecated HowTo Schema</option>
+        <optgroup label="🛍️ Rich Results & SERP">
+          <option value="e-commerce">🛍️ E-Commerce Product</option>
+          <option value="article">📰 Multi-Author Article</option>
+          <option value="recipe">🍳 Cooking Recipe & Nutrition</option>
+          <option value="restaurant">🍽️ Restaurant & LocalBusiness</option>
+          <option value="job">💼 Job Posting & Salary</option>
+          <option value="video">🎬 Video & Media Streaming</option>
+          <option value="software">📱 Software Application & SaaS</option>
+          <option value="event">🎟️ Event & Ticket Booking</option>
+          <option value="profile">👤 ProfilePage & Creator (2026)</option>
+          <option value="breadcrumb">🥖 BreadcrumbList Navigation</option>
+        </optgroup>
+        <optgroup label="🏷️ HTML Markup Formats">
+          <option value="microdata">🏷️ HTML Microdata (Bakery)</option>
+          <option value="rdfa">🌐 RDFa (Book Metadata)</option>
+        </optgroup>
+        <optgroup label="⚠️ Lifecycle & Error Testing">
+          <option value="errors">⚠️ Broken Syntax & Date Errors</option>
+          <option value="faq">❓ FAQPage (Google Retired Notice)</option>
+          <option value="deprecated">⏳ Deprecated HowTo Schema</option>
+        </optgroup>
       </select>
       <button type="button" id="theme-btn" class="dev-btn">🌙 Dark Mode</button>
     </div>
