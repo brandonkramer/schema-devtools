@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Schema DevTools — Local Dev Sandbox</title>
-  <link rel="stylesheet" href="../ui/theme.css">
-  <link rel="stylesheet" href="../devtools/panel.css">
+  <link rel="stylesheet" href="/ui/theme.css">
+  <link rel="stylesheet" href="/devtools/panel.css">
   <style>
     body {
       margin: 0;
@@ -98,13 +98,13 @@
   </div>
 
   <!-- Load Schema Engine -->
-  <script src="../devtools/engine.classic.js"></script>
+  <script src="/devtools/engine.classic.js"></script>
 
   <!-- Mount Sandbox App -->
   <script type="module">
-    import { mountPanel } from '../ui/app.js';
-    import { store, actions } from '../ui/store.js';
-    import { FIXTURES } from './fixtures.js';
+    import { mountPanel } from '/ui/app.js';
+    import { store, actions } from '/ui/store.js';
+    import { FIXTURES } from '/dev/fixtures.js';
 
     const engine = globalThis.SchemaDT || {};
 

@@ -45,9 +45,8 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log('------------------------------------------------------------');
-  console.log(`🚀 Schema DevTools Local Testbed running at:`);
+  console.log(`🚀 Schema DevTools Local Sandbox running at:`);
   console.log(`   👉 http://localhost:${PORT}`);
-  console.log(`   👉 http://localhost:${PORT}/dev/index.html`);
   console.log('------------------------------------------------------------');
   console.log('Press Ctrl+C to stop.');
 });
