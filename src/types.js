@@ -31,6 +31,7 @@
  * @property {string} title
  * @property {string|null} canonical
  * @property {string|null} robots
+ * @property {string} [visibleText]
  * @property {string} inspectedAt
  * @property {JsonLdBlock[]} jsonld
  * @property {MarkupNode[]} microdata

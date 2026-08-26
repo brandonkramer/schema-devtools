@@ -590,6 +590,82 @@ export const FIXTURES = {
     ],
   },
 
+  movie: {
+    name: 'Movie Carousel Item (Director & Rating)',
+    url: 'https://example.com/movies/a-star-is-born',
+    canonical: 'https://example.com/movies/a-star-is-born',
+    entities: [
+      {
+        id: 'https://example.com/movies/a-star-is-born#movie',
+        types: ['Movie'],
+        format: 'jsonld',
+        sourceIndex: 0,
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'Movie',
+          '@id': 'https://example.com/movies/a-star-is-born#movie',
+          name: 'A Star Is Born',
+          image: 'https://example.com/photos/6x9/photo.jpg',
+          dateCreated: '2018-10-05',
+          director: { '@type': 'Person', name: 'Bradley Cooper' },
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: 90,
+            bestRating: 100,
+            ratingCount: 19141,
+          },
+        },
+      },
+    ],
+  },
+
+  'vacation-rental': {
+    name: 'Vacation Rental Listing',
+    url: 'https://example.com/rentals/mountain-cabin',
+    canonical: 'https://example.com/rentals/mountain-cabin',
+    entities: [
+      {
+        id: 'https://example.com/rentals/mountain-cabin#listing',
+        types: ['VacationRental'],
+        format: 'jsonld',
+        sourceIndex: 0,
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'VacationRental',
+          '@id': 'https://example.com/rentals/mountain-cabin#listing',
+          name: 'Pine Ridge Cabin',
+          identifier: 'cabin-abc123',
+          description: 'A two-bedroom cabin near the trailhead.',
+          image: [
+            'https://example.com/rentals/cabin-1.jpg',
+            'https://example.com/rentals/cabin-2.jpg',
+            'https://example.com/rentals/cabin-3.jpg',
+            'https://example.com/rentals/cabin-4.jpg',
+            'https://example.com/rentals/cabin-5.jpg',
+            'https://example.com/rentals/cabin-6.jpg',
+            'https://example.com/rentals/cabin-7.jpg',
+            'https://example.com/rentals/cabin-8.jpg',
+          ],
+          latitude: '45.52000',
+          longitude: '-122.68000',
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: '100 Forest Rd',
+            addressLocality: 'Hood River',
+            addressRegion: 'OR',
+            postalCode: '97031',
+            addressCountry: 'US',
+          },
+          containsPlace: {
+            '@type': 'Accommodation',
+            occupancy: { '@type': 'QuantitativeValue', value: 4 },
+            numberOfBedrooms: 2,
+          },
+        },
+      },
+    ],
+  },
+
   deprecated: {
     name: 'Deprecated Schema (HowTo / SpecialAnnouncement)',
     url: 'https://example.com/how-to-fix',

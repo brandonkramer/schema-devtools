@@ -141,6 +141,19 @@ export function Toolbar() {
             },
             span('Download Report (.json)'),
           ),
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.downloadEntity();
+                actions.closeExportMenu();
+              },
+            },
+            span('Download Entity (.json)'),
+            small('Selected entity'),
+          ),
         ),
       ),
     ),

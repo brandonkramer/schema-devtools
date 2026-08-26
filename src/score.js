@@ -8,12 +8,14 @@
 /** @typedef {import('./types.js').ScoreResult} ScoreResult */
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
-import { LOCAL_BUSINESS_TYPES, RICH_RESULT_RULES } from './catalog/rich-results.js';
+import { LOCAL_BUSINESS_TYPES, ORGANIZATION_TYPES, RICH_RESULT_RULES } from './catalog/rich-results.js';
 import { hasPropertyPath } from './catalog/syntax.js';
 
 function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
-    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)));
+    return entity.types.includes(rule.type)
+      || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)))
+      || (rule.type === 'Organization' && entity.types.some((type) => ORGANIZATION_TYPES.has(type)));
   });
 }
 

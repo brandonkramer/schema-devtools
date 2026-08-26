@@ -1,4 +1,4 @@
-import { actions, selectedEntity, store } from './store.js';
+import { actions, entityDownloadName, selectedEntity, store } from './store.js';
 
 /** Install browser-only fallback actions used by the zero-build sandbox. */
 export function configureSandboxActions() {
@@ -34,6 +34,26 @@ export function configureSandboxActions() {
     anchor.click();
     URL.revokeObjectURL(url);
     store.status = 'Downloaded JSON report';
+    store.statusError = false;
+  };
+  actions.downloadEntity = () => {
+    const entity = selectedEntity();
+    if (!entity) {
+      store.status = 'Select an entity to download';
+      store.statusError = true;
+      return;
+    }
+    const text = store.sandboxOpen && store.sandboxEntityId === entity.id
+      ? store.sandboxText
+      : JSON.stringify(entity.data, null, 2);
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = entityDownloadName(entity);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    store.status = `Downloaded ${anchor.download}`;
     store.statusError = false;
   };
   actions.copyBundle = () => {

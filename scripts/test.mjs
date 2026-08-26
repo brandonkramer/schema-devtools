@@ -14,7 +14,7 @@ import { matchRuleInCatalog, hasProperty, hasPropertyPath, isIso8601Date, isIso4
 import { formatEvalException, listen } from '../devtools/host.js';
 import { PAGE_WATCH_INSTALL } from '../devtools/page-sources.js';
 import { serpCards } from '../ui/features/serp.js';
-import { matchesSearch, store, visibleEntities } from '../ui/store.js';
+import { entityDownloadName, matchesSearch, store, visibleEntities } from '../ui/store.js';
 import { FIXTURES } from '../sandbox/fixtures.js';
 
 const root = new URL('../', import.meta.url);
@@ -90,12 +90,13 @@ console.log(`✅ Passed (${bundleSource.length} bytes)`);
 // -----------------------------------------------------------------------------
 process.stdout.write('⏳ 2. Schema Engine & Scoring Tests... ');
 
-function snapshotFor(parsed, agent = { hasModelContext: false, modelContext: null, hasLlmsTxtLink: false }) {
+function snapshotFor(parsed, extra = {}) {
   return {
     url: 'https://example.test/page',
     title: 'Example',
     canonical: 'https://example.test/page',
     robots: null,
+    visibleText: extra.visibleText ?? null,
     inspectedAt: '2026-08-26T00:00:00.000Z',
     jsonld: [{
       index: 0,
@@ -107,12 +108,12 @@ function snapshotFor(parsed, agent = { hasModelContext: false, modelContext: nul
     }],
     microdata: [],
     rdfa: [],
-    agent,
+    agent: extra.agent || { hasModelContext: false, modelContext: null, hasLlmsTxtLink: false },
   };
 }
 
-function runInspect(parsed) {
-  const snapshot = snapshotFor(parsed);
+function runInspect(parsed, extra = {}) {
+  const snapshot = snapshotFor(parsed, extra);
   const { entities } = normalize(snapshot);
   const findings = validate(snapshot, entities);
   return { entities, findings, score: score(findings, entities) };
@@ -135,6 +136,10 @@ const faq = runInspect({
 assert(hasCode(faq, 'FAQ_GOOGLE_UNSUPPORTED'));
 assert.equal(faq.findings.filter((f) => f.severity !== 'info').length, 0);
 assert.equal(faq.score.total, score([], faq.entities).total);
+const emptyFaq = runInspect({ '@context': 'https://schema.org', '@type': 'FAQPage' });
+assert(hasCode(emptyFaq, 'FAQ_EMPTY_MAIN_ENTITY'));
+assert.equal(emptyFaq.findings.find((finding) => finding.code === 'FAQ_EMPTY_MAIN_ENTITY')?.severity, 'info');
+assert.equal(emptyFaq.score.errorCount, 0);
 
 // Deprecated Sitelinks Searchbox
 const website = runInspect({
@@ -250,6 +255,64 @@ const videoWithoutDescription = runInspect({
 });
 assert(!hasCode(videoWithoutDescription, 'MISSING_DESCRIPTION'));
 assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Product', name: 'Product' }), 'MISSING_OFFERS_OR_REVIEW_OR_AGGREGATERATING'));
+const merchantBare = runInspect({
+  '@context': 'https://schema.org', '@type': 'Product', name: 'Widget',
+  offers: { '@type': 'Offer', price: 12 },
+});
+assert(hasCode(merchantBare, 'MERCHANT_MISSING_IMAGE'));
+assert(hasCode(merchantBare, 'MERCHANT_MISSING_PRICE_CURRENCY'));
+const snippetProduct = runInspect({
+  '@context': 'https://schema.org', '@type': 'Product', name: 'Widget',
+  review: { '@type': 'Review', name: 'Review' },
+});
+assert(!hasCode(snippetProduct, 'MERCHANT_MISSING_IMAGE'));
+const merchantOk = runInspect({
+  '@context': 'https://schema.org', '@type': 'Product', name: 'Widget',
+  image: 'https://example.test/w.jpg', gtin13: '0123456789012',
+  offers: { '@type': 'Offer', price: 12, priceCurrency: 'USD' },
+});
+assert(!hasCode(merchantOk, 'MERCHANT_MISSING_IMAGE'));
+assert(!hasCode(merchantOk, 'MERCHANT_MISSING_PRICE_CURRENCY'));
+assert(!hasCode(merchantOk, 'MERCHANT_MISSING_IDENTIFIER'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'Product', name: 'Widget',
+  image: 'https://example.test/w.jpg',
+  offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },
+}), 'MERCHANT_PRICE_NOT_POSITIVE'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'Product', name: 'Widget',
+  image: 'https://example.test/w.jpg',
+  offers: {
+    '@type': 'Offer', price: 10, priceCurrency: 'USD',
+    priceSpecification: {
+      '@type': 'UnitPriceSpecification', price: 8, priceCurrency: 'USD',
+      priceType: 'https://schema.org/StrikethroughPrice',
+      validForMemberTier: { '@id': '#gold' },
+    },
+  },
+}), 'MERCHANT_PRICE_TYPE_CONFLICT'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Movie', name: 'Film' }), 'MISSING_IMAGE'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'VacationRental', name: 'Cabin' }), 'MISSING_IDENTIFIER'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'ClaimReview', name: 'Claim' }), 'CLAIMREVIEW_GOOGLE_UNSUPPORTED'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'Event', name: 'Webinar', startDate: '2026-09-01',
+  location: { '@type': 'VirtualLocation', url: 'https://example.test/live' },
+  eventAttendanceMode: 'https://schema.org/OnlineEventAttendanceMode',
+}), 'EVENT_ONLINE_GOOGLE_UNSUPPORTED'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'NewsArticle', headline: 'Story',
+  isAccessibleForFree: false,
+}), 'PAYWALL_MISSING_HAS_PART'));
+const visibleMiss = runInspect(
+  { '@context': 'https://schema.org', '@type': 'Product', name: 'Secret Widget Name', review: { '@type': 'Review', name: 'Ok' } },
+  { visibleText: 'Buy our headphones today for 20 dollars' },
+);
+assert(hasCode(visibleMiss, 'VISIBLE_MISMATCH'));
+const visibleHit = runInspect(
+  { '@context': 'https://schema.org', '@type': 'Product', name: 'Secret Widget Name', review: { '@type': 'Review', name: 'Ok' } },
+  { visibleText: 'The Secret Widget Name is on sale' },
+);
+assert(!hasCode(visibleHit, 'VISIBLE_MISMATCH'));
 for (const signal of ['offers', 'review', 'aggregateRating']) {
   const value = signal === 'aggregateRating'
     ? { '@type': 'AggregateRating', ratingValue: 5, ratingCount: 1 }
@@ -372,7 +435,7 @@ const referencedReview = runInspect({
   '@context': 'https://schema.org',
   '@graph': [
     { '@id': '#review', '@type': 'Review', itemReviewed: { '@id': '#product' }, reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@id': '#author' } },
-    { '@id': '#product', '@type': 'Product', name: 'Product', offers: { '@type': 'Offer', price: 10 } },
+    { '@id': '#product', '@type': 'Product', name: 'Product', image: 'https://example.test/p.jpg', offers: { '@type': 'Offer', price: 10, priceCurrency: 'USD' } },
     { '@id': '#author', '@type': 'Person', name: 'Author' },
   ],
 });
@@ -449,6 +512,7 @@ assert.equal(plainScore.breakdown.agent, 0);
 
 // Extract Source String
 assert.equal(typeof EXTRACT_SOURCE, 'string');
+assert(EXTRACT_SOURCE.includes('visibleText'));
 assert(EXTRACT_SOURCE.includes('JSON.stringify(data)'));
 assert(EXTRACT_SOURCE.includes("rel.includes('describedby')"));
 assert(!EXTRACT_SOURCE.includes('navigator.modelContext'));
@@ -653,6 +717,9 @@ assert.match(
 );
 assert.match(toolbarJs, /id:\s*['"]btn-inspect['"]/, 'Inspect in Elements must remain an explicit action in toolbar.');
 assert.match(toolbarJs, /actions\.inspectSelected\(\)/, 'Inspect in Elements must be wired to the explicit button.');
+assert.match(toolbarJs, /actions\.downloadEntity\(\)/, 'Export menu must offer selected-entity JSON download.');
+assert.match(readFileSync(new URL('ui/views/tree.js', root), 'utf8'), /schema\.org/, 'Tree keys and types must link to schema.org.');
+assert.doesNotMatch(readFileSync(new URL('ui/views/tree.js', root), 'utf8'), /\.innerHTML/, 'Tree view must not assign innerHTML.');
 assert.match(
   entityListJs,
   /actions\.selectEntity\(entity,\s*\{\s*inspect:\s*event\.altKey\s*\}\)/,
@@ -695,11 +762,34 @@ store.entities = [
   { id: 'restaurant:1', types: ['Restaurant'], format: 'jsonld', sourceIndex: 0, data: { name: 'Cafe' } },
   { id: 'review:1', types: ['Review'], format: 'jsonld', sourceIndex: 0, data: { name: 'Superb', reviewRating: { ratingValue: '5' } } },
   { id: 'video:1', types: ['VideoObject'], format: 'jsonld', sourceIndex: 0, data: { name: 'Tutorial', duration: 'PT10M' } },
+  {
+    id: 'product:1', types: ['Product'], format: 'jsonld', sourceIndex: 0,
+    data: {
+      name: 'Anvil',
+      offers: {
+        price: '39.99', priceCurrency: 'USD', availability: 'https://schema.org/InStock',
+        shippingDetails: { shippingRate: { value: '0', currency: 'USD' } },
+        hasMerchantReturnPolicy: { merchantReturnDays: 30, returnFees: 'https://schema.org/FreeReturn' },
+        priceSpecification: { price: '29.99', priceCurrency: 'USD', validForMemberTier: { name: 'gold' } },
+      },
+    },
+  },
+  { id: 'movie:1', types: ['Movie'], format: 'jsonld', sourceIndex: 0, data: { name: 'A Star Is Born', director: { name: 'Bradley Cooper' } } },
+  { id: 'org:1', types: ['OnlineStore'], format: 'jsonld', sourceIndex: 0, data: { name: 'Example Store', hasMemberProgram: { name: 'Plus' } } },
+  { id: 'vr:1', types: ['VacationRental'], format: 'jsonld', sourceIndex: 0, data: { name: 'Cabin', containsPlace: { occupancy: { value: 4 } }, address: { addressLocality: 'Hood River' } } },
 ];
 const cards = serpCards();
-assert.equal(cards.length, 3, 'Must generate cards for Restaurant, Review, and Video.');
 assert(cards.some((c) => c.kind === 'Review'), 'Review SERP card must be generated.');
 assert(cards.some((c) => c.kind === 'Video'), 'Video SERP card must be generated.');
+const productCard = cards.find((c) => c.kind === 'Product');
+assert(productCard, 'Product SERP card must be generated.');
+assert.match(productCard.meta, /Free shipping/);
+assert.match(productCard.meta, /30-day free returns/);
+assert.match(productCard.meta, /Member USD 29.99/);
+assert(cards.some((c) => c.kind === 'Movie' && c.title === 'A Star Is Born'), 'Movie SERP card must be generated.');
+assert(cards.some((c) => c.kind === 'Organization' && c.meta.includes('Loyalty')), 'Organization SERP card must be generated.');
+assert(cards.some((c) => c.kind === 'VacationRental' && c.meta.includes('Sleeps 4')), 'VacationRental SERP card must be generated.');
+assert.equal(entityDownloadName({ types: ['Product'], data: { name: 'Acme Anvil' } }), 'product-acme-anvil.json');
 
 assert.equal(
   formatEvalException({ description: 'Operation failed: %s', details: ['Inspected tab was closed'] }),
@@ -719,7 +809,7 @@ console.log('✅ Passed');
 // -----------------------------------------------------------------------------
 process.stdout.write('⏳ 5. Security & Dependency Guardrails... ');
 
-const agentsCheck = spawnSync('git', ['grep', '\\.agents', '--', ':!.agents', ':!*.md', ':!.cursor', ':!.gitignore', ':!scripts/test.mjs'], { encoding: 'utf8' });
+const agentsCheck = spawnSync('git', ['grep', '\\.agents', '--', ':!.agents', ':!*.md', ':!.cursor', ':!.gitignore', ':!scripts/test.mjs', ':!scripts/test-dist.mjs'], { encoding: 'utf8' });
 assert.equal(agentsCheck.stdout.trim(), '', 'No production files may reference .agents/');
 
 const usersCheck = spawnSync('git', ['grep', '-i', '/Users/', '--', ':!*.lock', ':!node_modules', ':!scripts/test.mjs'], { encoding: 'utf8' });

@@ -1,7 +1,7 @@
 /** @typedef {import('../src/types.js').PageSnapshot} PageSnapshot */
 /** @typedef {import('../src/types.js').Finding} Finding */
 
-import { actions, selectedEntity, store } from '../ui/store.js';
+import { actions, entityDownloadName, selectedEntity, store } from '../ui/store.js';
 import { mountPanel } from '../ui/app.js';
 import { formatEvalException, listen } from './host.js';
 import { PAGE_WATCH_INSTALL, PAGE_WATCH_REMOVE } from './page-sources.js';
@@ -376,6 +376,30 @@ function bindActions() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 0);
     setStatus('Downloaded schema-report.json');
+  };
+  actions.downloadEntity = () => {
+    const entity = selectedEntity();
+    if (store.sandboxOpen && store.sandboxEntityId === entity?.id) {
+      const blob = new Blob([store.sandboxText], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = entityDownloadName(entity);
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 0);
+      setStatus(`Downloaded ${a.download}`);
+      return;
+    }
+    if (!entity) {
+      setStatus('Select an entity to download', true);
+      return;
+    }
+    const blob = new Blob([JSON.stringify(entity.data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = entityDownloadName(entity);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 0);
+    setStatus(`Downloaded ${a.download}`);
   };
   actions.copyBundle = () => {
     if (!agentBundle) {

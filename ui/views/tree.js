@@ -1,7 +1,52 @@
 import van from '../../vendor/van.js';
 import { actions, refTarget, store } from '../store.js';
 
-const { div, span, button } = van.tags;
+const { a, div, span, button } = van.tags;
+
+/**
+ * @param {string} term
+ */
+function schemaOrgUrl(term) {
+  const clean = String(term).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '').trim();
+  if (!clean || !/^[A-Za-z][A-Za-z0-9]*$/.test(clean)) return '';
+  return `https://schema.org/${clean}`;
+}
+
+/**
+ * @param {string} term
+ * @param {string} className
+ * @param {string} [label]
+ */
+function SchemaLink(term, className, label) {
+  const href = schemaOrgUrl(term);
+  const text = label ?? term;
+  if (!href) return span({ class: className }, text);
+  return a(
+    {
+      class: `${className} tree-docs`,
+      href,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: `Open ${href}`,
+      onclick: (event) => event.stopPropagation(),
+    },
+    text,
+  );
+}
+
+/**
+ * @param {unknown} typeField
+ */
+function TypeSummary(typeField) {
+  if (typeField == null) return 'Object';
+  const types = Array.isArray(typeField) ? typeField : [typeField];
+  const nodes = [];
+  types.forEach((type, index) => {
+    if (index) nodes.push(', ');
+    nodes.push(SchemaLink(String(type), 'dt-type-name'));
+  });
+  return nodes;
+}
 
 export function EntityLink(entity, label) {
   return button(
@@ -113,7 +158,7 @@ export function TreeValue(value, idMap, path = 'root', entityId = '', depth = 0)
         class: 'dt-type-summary',
         onclick: () => actions.toggleCollapse(collapseKey),
       },
-      obj['@type'] ? String(obj['@type']) : 'Object',
+      TypeSummary(obj['@type']),
       () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ` ${previewObject(obj)}`) : ''),
     ),
     () =>
@@ -129,7 +174,9 @@ export function TreeValue(value, idMap, path = 'root', entityId = '', depth = 0)
               const isNested = val !== null && typeof val === 'object';
               return div(
                 { class: 'tree-node' },
-                span({ class: `dt-key ${isSpecial ? 'dt-meta-key' : ''}` }, `${key}:`),
+                isSpecial || key.includes(':')
+                  ? span({ class: `dt-key ${isSpecial ? 'dt-meta-key' : ''}` }, `${key}:`)
+                  : SchemaLink(key, 'dt-key', `${key}:`),
                 key === '@id'
                   ? IdRef(val, idMap)
                   : target && !Array.isArray(val) && Object.keys(/** @type {object} */ (val)).length <= 2

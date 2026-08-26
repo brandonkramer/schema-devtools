@@ -444,11 +444,21 @@ export function extractPageSchema() {
     .filter(Boolean)
     .join(', ');
 
+  const visibleParts = [
+    document.title || '',
+    document.querySelector('h1')?.textContent || '',
+    document.querySelector('meta[property="og:title" i]')?.getAttribute('content') || '',
+    document.querySelector('meta[property="og:price:amount" i], meta[property="product:price:amount" i]')?.getAttribute('content') || '',
+    document.body?.innerText || '',
+  ];
+  const visibleText = visibleParts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 80_000);
+
   return {
     url: location.href,
     title: document.title ?? '',
     canonical: canonicalEl?.getAttribute('href') ?? null,
     robots: robotsMeta || null,
+    visibleText: visibleText || null,
     inspectedAt: new Date().toISOString(),
     jsonld: extractJsonLd(),
     microdata: extractMicrodata(),

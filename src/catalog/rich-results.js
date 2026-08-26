@@ -6,6 +6,17 @@
 
 /** @typedef {import('../types.js').TypeRule} TypeRule */
 
+/** Organization subtypes that inherit Google's Organization guide. */
+export const ORGANIZATION_TYPES = new Set([
+  'Organization', 'OnlineStore', 'OnlineBusiness', 'NewsMediaOrganization',
+  'Corporation', 'NGO', 'GovernmentOrganization', 'SportsOrganization',
+]);
+
+/** Vehicle types whose dedicated Google listing feature was retired in 2025. */
+export const VEHICLE_LISTING_TYPES = new Set([
+  'Vehicle', 'Car', 'Motorcycle', 'BusOrCoach', 'MotorizedBicycle',
+]);
+
 /** Schema.org LocalBusiness subtypes supported by Google's Local Business guide. */
 export const LOCAL_BUSINESS_TYPES = new Set([
   'LocalBusiness', 'AccountingService', 'AnimalShelter', 'Attorney', 'AutomotiveBusiness',
@@ -92,7 +103,11 @@ export const RICH_RESULT_RULES = [
   {
     type: 'Organization',
     required: [],
-    recommended: ['name', 'url', 'logo', 'sameAs', 'contactPoint'],
+    recommended: [
+      'name', 'url', 'logo', 'sameAs', 'contactPoint', 'address', 'legalName',
+      'description', 'iso6523Code', 'vatID', 'hasMerchantReturnPolicy',
+      'hasShippingService', 'hasMemberProgram',
+    ],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/organization',
   },
   {
@@ -165,7 +180,7 @@ export const RICH_RESULT_RULES = [
   {
     type: 'MerchantReturnPolicy',
     required: [],
-    recommended: [],
+    recommended: ['applicableCountry', 'returnPolicyCategory', 'merchantReturnDays', 'returnMethod', 'returnFees'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/return-policy',
   },
   {
@@ -173,5 +188,43 @@ export const RICH_RESULT_RULES = [
     required: [],
     recommended: ['shippingRate', 'deliveryTime', 'shippingDestination'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/merchant-listing#shipping',
+  },
+  {
+    type: 'ShippingService',
+    required: [],
+    recommended: ['name', 'fulfillmentType', 'shippingConditions'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/shipping-policy',
+  },
+  {
+    type: 'MemberProgram',
+    required: ['name'],
+    recommended: ['hasTiers', 'url', 'description'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/loyalty-program',
+  },
+  {
+    type: 'Movie',
+    required: ['name', 'image'],
+    recommended: ['director', 'dateCreated', 'aggregateRating', 'review'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/movie',
+  },
+  {
+    type: 'VacationRental',
+    required: ['name', 'identifier', 'image', 'containsPlace', 'containsPlace.occupancy'],
+    anyOf: [['latitude', 'geo.latitude'], ['longitude', 'geo.longitude']],
+    recommended: ['address', 'description', 'aggregateRating', 'review', 'checkinTime', 'checkoutTime'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/vacation-rental',
+  },
+  {
+    type: 'ImageObject',
+    required: [],
+    recommended: ['license', 'acquireLicensePage', 'creditText', 'creator', 'contentUrl'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/image-license-metadata',
+  },
+  {
+    type: 'SpeakableSpecification',
+    required: [],
+    anyOf: [['cssSelector', 'xpath']],
+    recommended: [],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/speakable',
   },
 ];

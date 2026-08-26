@@ -38,6 +38,7 @@ export const actions = {
   copyJson: () => {},
   copyScript: () => {},
   downloadJson: () => {},
+  downloadEntity: () => {},
   copyBundle: () => {},
   copyMarkdown: () => {},
   copyAiPrompt: () => {},
@@ -224,8 +225,18 @@ export function entityLabel(entity) {
 }
 
 /**
- * @param {unknown} value
+ * @param {{ types?: string[], data?: Record<string, unknown> } | null} entity
  */
+export function entityDownloadName(entity) {
+  const type = entity?.types?.[0] || 'entity';
+  const name = readText(entity?.data?.name || entity?.data?.headline || entity?.data?.title);
+  const slug = [type, name].filter(Boolean).join(' ').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return `${slug || 'entity'}.json`;
+}
+
 export function readUrl(value) {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) return readUrl(value[0]);

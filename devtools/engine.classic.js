@@ -446,11 +446,21 @@ function extractPageSchema() {
     .filter(Boolean)
     .join(', ');
 
+  const visibleParts = [
+    document.title || '',
+    document.querySelector('h1')?.textContent || '',
+    document.querySelector('meta[property="og:title" i]')?.getAttribute('content') || '',
+    document.querySelector('meta[property="og:price:amount" i], meta[property="product:price:amount" i]')?.getAttribute('content') || '',
+    document.body?.innerText || '',
+  ];
+  const visibleText = visibleParts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 80_000);
+
   return {
     url: location.href,
     title: document.title ?? '',
     canonical: canonicalEl?.getAttribute('href') ?? null,
     robots: robotsMeta || null,
+    visibleText: visibleText || null,
     inspectedAt: new Date().toISOString(),
     jsonld: extractJsonLd(),
     microdata: extractMicrodata(),
@@ -696,6 +706,17 @@ const SELECTION_EXTRACT_SOURCE = `(() => {
 
 /** @typedef {import('../types.js').TypeRule} TypeRule */
 
+/** Organization subtypes that inherit Google's Organization guide. */
+const ORGANIZATION_TYPES = new Set([
+  'Organization', 'OnlineStore', 'OnlineBusiness', 'NewsMediaOrganization',
+  'Corporation', 'NGO', 'GovernmentOrganization', 'SportsOrganization',
+]);
+
+/** Vehicle types whose dedicated Google listing feature was retired in 2025. */
+const VEHICLE_LISTING_TYPES = new Set([
+  'Vehicle', 'Car', 'Motorcycle', 'BusOrCoach', 'MotorizedBicycle',
+]);
+
 /** Schema.org LocalBusiness subtypes supported by Google's Local Business guide. */
 const LOCAL_BUSINESS_TYPES = new Set([
   'LocalBusiness', 'AccountingService', 'AnimalShelter', 'Attorney', 'AutomotiveBusiness',
@@ -782,7 +803,11 @@ const RICH_RESULT_RULES = [
   {
     type: 'Organization',
     required: [],
-    recommended: ['name', 'url', 'logo', 'sameAs', 'contactPoint'],
+    recommended: [
+      'name', 'url', 'logo', 'sameAs', 'contactPoint', 'address', 'legalName',
+      'description', 'iso6523Code', 'vatID', 'hasMerchantReturnPolicy',
+      'hasShippingService', 'hasMemberProgram',
+    ],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/organization',
   },
   {
@@ -855,7 +880,7 @@ const RICH_RESULT_RULES = [
   {
     type: 'MerchantReturnPolicy',
     required: [],
-    recommended: [],
+    recommended: ['applicableCountry', 'returnPolicyCategory', 'merchantReturnDays', 'returnMethod', 'returnFees'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/return-policy',
   },
   {
@@ -863,6 +888,44 @@ const RICH_RESULT_RULES = [
     required: [],
     recommended: ['shippingRate', 'deliveryTime', 'shippingDestination'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/merchant-listing#shipping',
+  },
+  {
+    type: 'ShippingService',
+    required: [],
+    recommended: ['name', 'fulfillmentType', 'shippingConditions'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/shipping-policy',
+  },
+  {
+    type: 'MemberProgram',
+    required: ['name'],
+    recommended: ['hasTiers', 'url', 'description'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/loyalty-program',
+  },
+  {
+    type: 'Movie',
+    required: ['name', 'image'],
+    recommended: ['director', 'dateCreated', 'aggregateRating', 'review'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/movie',
+  },
+  {
+    type: 'VacationRental',
+    required: ['name', 'identifier', 'image', 'containsPlace', 'containsPlace.occupancy'],
+    anyOf: [['latitude', 'geo.latitude'], ['longitude', 'geo.longitude']],
+    recommended: ['address', 'description', 'aggregateRating', 'review', 'checkinTime', 'checkoutTime'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/vacation-rental',
+  },
+  {
+    type: 'ImageObject',
+    required: [],
+    recommended: ['license', 'acquireLicensePage', 'creditText', 'creator', 'contentUrl'],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/image-license-metadata',
+  },
+  {
+    type: 'SpeakableSpecification',
+    required: [],
+    anyOf: [['cssSelector', 'xpath']],
+    recommended: [],
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/speakable',
   },
 ];
 
@@ -873,15 +936,21 @@ const RICH_RESULT_RULES = [
  * @file
  */
 
-/** Schema types whose Google rich-result feature is no longer supported. */
-const DEPRECATED_TYPES = ['HowTo', 'SpecialAnnouncement'];
+/** Schema types whose dedicated Google rich-result feature is no longer supported. */
+const DEPRECATED_TYPES = [
+  'HowTo',
+  'SpecialAnnouncement',
+  'ClaimReview',
+  'Quiz',
+  'LearningVideo',
+];
 
 /** Current Google Search status for FAQPage markup. */
 const FAQ_GOOGLE_STATUS = {
   code: 'FAQ_GOOGLE_UNSUPPORTED',
   message:
-    'Google Search no longer shows FAQ rich results. These findings check FAQPage structure only and do not imply Google rich-result eligibility.',
-  docsUrl: 'https://developers.google.com/search/updates#faq-deprecation',
+    'Google Search no longer shows FAQ rich results (sunset 7 May 2026). These findings check FAQPage structure only and do not imply Google rich-result eligibility.',
+  docsUrl: 'https://developers.google.com/search/updates',
 };
 
 
@@ -1403,6 +1472,20 @@ function isLocalBusiness(types) {
   return types.some((type) => LOCAL_BUSINESS_TYPES.has(type));
 }
 
+function isOrganization(types) {
+  return types.some((type) => ORGANIZATION_TYPES.has(type));
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Record<string, unknown>|null}
+ */
+function firstRecord(value) {
+  if (Array.isArray(value)) return firstRecord(value[0]);
+  if (value && typeof value === 'object') return /** @type {Record<string, unknown>} */ (value);
+  return null;
+}
+
 /**
  * Check a property path while following local JSON-LD @id references.
  * @param {Record<string, unknown>} data
@@ -1484,7 +1567,7 @@ function validateFaqStructure(data) {
 
   if (items.length === 0) {
     findings.push({
-      severity: 'error',
+      severity: 'info',
       code: 'FAQ_EMPTY_MAIN_ENTITY',
       message: 'FAQPage mainEntity must contain Question items.',
       path: 'mainEntity',
@@ -1496,7 +1579,7 @@ function validateFaqStructure(data) {
   items.forEach((item, i) => {
     if (typeof item !== 'object' || item === null) {
       findings.push({
-        severity: 'error',
+        severity: 'info',
         code: 'FAQ_INVALID_QUESTION',
         message: `FAQ item ${i + 1} must be a Question object.`,
         path: `mainEntity[${i}]`,
@@ -1509,7 +1592,7 @@ function validateFaqStructure(data) {
     const isQuestion = typeList.some((t) => String(t).includes('Question'));
     if (!hasProperty(q, 'name')) {
       findings.push({
-        severity: 'error',
+        severity: 'info',
         code: 'FAQ_MISSING_QUESTION_NAME',
         message: `FAQ Question ${i + 1} is missing name.`,
         path: `mainEntity[${i}].name`,
@@ -1517,7 +1600,7 @@ function validateFaqStructure(data) {
     }
     if (!isQuestion) {
       findings.push({
-        severity: 'warning',
+        severity: 'info',
         code: 'FAQ_INVALID_QUESTION_TYPE',
         message: `FAQ item ${i + 1} should have @type Question.`,
         path: `mainEntity[${i}].@type`,
@@ -1526,7 +1609,7 @@ function validateFaqStructure(data) {
     const answer = q.acceptedAnswer;
     if (!answer) {
       findings.push({
-        severity: 'error',
+        severity: 'info',
         code: 'FAQ_MISSING_ANSWER',
         message: `FAQ Question ${i + 1} is missing acceptedAnswer.`,
         path: `mainEntity[${i}].acceptedAnswer`,
@@ -1535,7 +1618,7 @@ function validateFaqStructure(data) {
       const a = /** @type {Record<string, unknown>} */ (answer);
       if (!hasProperty(a, 'text') && !hasProperty(a, 'name')) {
         findings.push({
-          severity: 'warning',
+          severity: 'info',
           code: 'FAQ_ANSWER_MISSING_TEXT',
           message: `FAQ acceptedAnswer ${i + 1} should include text.`,
           path: `mainEntity[${i}].acceptedAnswer.text`,
@@ -2034,6 +2117,369 @@ function validateMerchantReturnPolicy(data) {
 }
 
 /**
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateMemberProgram(data) {
+  if (hasProperty(data, 'name')) return [];
+  return [{
+    severity: 'error',
+    code: 'MEMBER_PROGRAM_MISSING_NAME',
+    message: 'MemberProgram requires name.',
+    path: 'name',
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/loyalty-program',
+  }];
+}
+
+/**
+ * @param {Record<string, unknown>} data
+ * @param {string} typeSuffix
+ * @param {(obj: Record<string, unknown>) => Finding[]} validator
+ * @returns {Finding[]}
+ */
+function validateNestedType(data, typeSuffix, validator) {
+  /** @type {Finding[]} */
+  const findings = [];
+
+  function visit(value, path, depth) {
+    if (depth > 50 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}[${index}]`, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    const obj = /** @type {Record<string, unknown>} */ (value);
+    const types = obj['@type'];
+    const typeList = Array.isArray(types) ? types : types ? [types] : [];
+    if (typeList.some((type) => String(type).endsWith(typeSuffix))) {
+      findings.push(...validator(obj).map((finding) => ({
+        ...finding,
+        path: path ? `${path}.${finding.path}` : finding.path,
+      })));
+    }
+    for (const [key, child] of Object.entries(obj)) {
+      visit(child, path ? `${path}.${key}` : key, depth + 1);
+    }
+  }
+
+  for (const [key, value] of Object.entries(data)) visit(value, key, 0);
+  return findings;
+}
+
+const PRODUCT_IDENTIFIER_PATHS = ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14', 'isbn'];
+
+/**
+ * @param {Record<string, unknown>} data
+ * @param {Entity[]} entities
+ * @returns {boolean}
+ */
+function isMerchantListing(data, entities) {
+  return hasEntityPropertyPath(data, 'offers.price', entities)
+    || hasEntityPropertyPath(data, 'offers.priceSpecification.price', entities);
+}
+
+/**
+ * Merchant listing extras beyond the Product snippet anyOf rule.
+ * @param {Record<string, unknown>} data
+ * @param {Entity[]} entities
+ * @returns {Finding[]}
+ */
+function validateMerchantListing(data, entities) {
+  if (!isMerchantListing(data, entities)) return [];
+  /** @type {Finding[]} */
+  const findings = [];
+  const docsUrl = 'https://developers.google.com/search/docs/appearance/structured-data/merchant-listing';
+
+  if (!hasEntityPropertyPath(data, 'image', entities)) {
+    findings.push({
+      severity: 'error',
+      code: 'MERCHANT_MISSING_IMAGE',
+      message: 'Merchant listings require an image in addition to a buyable offer.',
+      path: 'image',
+      docsUrl,
+    });
+  }
+  if (
+    !hasEntityPropertyPath(data, 'offers.priceCurrency', entities)
+    && !hasEntityPropertyPath(data, 'offers.priceSpecification.priceCurrency', entities)
+  ) {
+    findings.push({
+      severity: 'error',
+      code: 'MERCHANT_MISSING_PRICE_CURRENCY',
+      message: 'Merchant listings require offers.priceCurrency.',
+      path: 'offers.priceCurrency',
+      docsUrl,
+    });
+  }
+
+  const offer = firstRecord(data.offers);
+  const rawPrice = offer && hasProperty(offer, 'price')
+    ? offer.price
+    : firstRecord(offer?.priceSpecification)?.price;
+  const price = typeof rawPrice === 'number' ? rawPrice : typeof rawPrice === 'string' ? Number(rawPrice) : NaN;
+  if (!Number.isNaN(price) && price <= 0) {
+    findings.push({
+      severity: 'error',
+      code: 'MERCHANT_PRICE_NOT_POSITIVE',
+      message: 'Merchant listing prices must be greater than zero.',
+      path: 'offers.price',
+      docsUrl,
+    });
+  }
+
+  if (!PRODUCT_IDENTIFIER_PATHS.some((path) => hasEntityPropertyPath(data, path, entities))) {
+    findings.push({
+      severity: 'warning',
+      code: 'MERCHANT_MISSING_IDENTIFIER',
+      message: 'Merchant listings should include a GTIN or ISBN so Google can match the product.',
+      path: 'gtin',
+      docsUrl,
+    });
+  }
+  if (
+    offer
+    && !hasProperty(offer, 'shippingDetails')
+    && !hasProperty(offer, 'hasShippingService')
+    && !hasProperty(data, 'hasShippingService')
+  ) {
+    findings.push({
+      severity: 'info',
+      code: 'MERCHANT_MISSING_SHIPPING',
+      message: 'Merchant listings can show shipping when Offer.shippingDetails or organization shipping policy is present.',
+      path: 'offers.shippingDetails',
+      docsUrl,
+    });
+  }
+  if (
+    !hasProperty(data, 'hasMerchantReturnPolicy')
+    && !(offer && hasProperty(offer, 'hasMerchantReturnPolicy'))
+  ) {
+    findings.push({
+      severity: 'info',
+      code: 'MERCHANT_MISSING_RETURN_POLICY',
+      message: 'Merchant listings can show returns when a MerchantReturnPolicy is present on the offer or organization.',
+      path: 'hasMerchantReturnPolicy',
+      docsUrl,
+    });
+  }
+
+  const specs = [];
+  if (offer) {
+    const raw = offer.priceSpecification;
+    if (Array.isArray(raw)) specs.push(...raw);
+    else if (raw) specs.push(raw);
+  }
+  for (const spec of specs) {
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) continue;
+    const row = /** @type {Record<string, unknown>} */ (spec);
+    if (hasProperty(row, 'priceType') && hasProperty(row, 'validForMemberTier')) {
+      findings.push({
+        severity: 'warning',
+        code: 'MERCHANT_PRICE_TYPE_CONFLICT',
+        message: 'Do not set priceType and validForMemberTier on the same UnitPriceSpecification.',
+        path: 'offers.priceSpecification',
+        docsUrl,
+      });
+      break;
+    }
+  }
+
+  if ('hasAdultConsideration' in data) {
+    const value = data.hasAdultConsideration;
+    if (typeof value !== 'boolean' && value !== 'true' && value !== 'false') {
+      findings.push({
+        severity: 'warning',
+        code: 'INVALID_ADULT_CONSIDERATION',
+        message: 'hasAdultConsideration must be a boolean.',
+        path: 'hasAdultConsideration',
+        docsUrl,
+      });
+    }
+  }
+
+  return findings;
+}
+
+const PAYWALL_TYPES = new Set(['Article', 'NewsArticle', 'BlogPosting', 'WebPage', 'WebPageElement']);
+
+/**
+ * @param {string[]} types
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validatePaywallAndSpeakable(types, data) {
+  if (!types.some((type) => PAYWALL_TYPES.has(type))) return [];
+  /** @type {Finding[]} */
+  const findings = [];
+  const free = data.isAccessibleForFree;
+  const isPaywalled = free === false || free === 'false' || free === 'False';
+  if (isPaywalled && !hasProperty(data, 'hasPart')) {
+    findings.push({
+      severity: 'warning',
+      code: 'PAYWALL_MISSING_HAS_PART',
+      message: 'Paywalled content should include hasPart with a cssSelector for the accessible section.',
+      path: 'hasPart',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/paywalled-content',
+    });
+  }
+  if (data.speakable) {
+    const speakable = firstRecord(data.speakable);
+    if (speakable && !hasProperty(speakable, 'cssSelector') && !hasProperty(speakable, 'xpath')) {
+      findings.push({
+        severity: 'warning',
+        code: 'SPEAKABLE_MISSING_SELECTOR',
+        message: 'speakable requires cssSelector or xpath.',
+        path: 'speakable',
+        docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/speakable',
+      });
+    }
+  }
+  return findings;
+}
+
+/**
+ * @param {string[]} types
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateRetiredFeatureHints(types, data) {
+  /** @type {Finding[]} */
+  const findings = [];
+  if (types.includes('Event')) {
+    const mode = String(data.eventAttendanceMode || '');
+    if (mode.includes('OnlineEventAttendanceMode') && !mode.includes('MixedEventAttendanceMode')) {
+      findings.push({
+        severity: 'info',
+        code: 'EVENT_ONLINE_GOOGLE_UNSUPPORTED',
+        message: 'Google Event rich results require a publicly bookable physical location; online-only events are not eligible.',
+        path: 'eventAttendanceMode',
+        docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/event',
+      });
+    }
+  }
+  if (
+    types.some((type) => VEHICLE_LISTING_TYPES.has(type))
+    && !types.includes('Product')
+  ) {
+    findings.push({
+      severity: 'info',
+      code: 'VEHICLE_LISTING_GOOGLE_UNSUPPORTED',
+      message: 'Google retired the vehicle listing rich result. Product merchant markup can still describe a vehicle for sale.',
+      path: '@type',
+      docsUrl: 'https://developers.google.com/search/updates',
+    });
+  }
+  if (hasProperty(data, 'estimatedSalary')) {
+    findings.push({
+      severity: 'info',
+      code: 'ESTIMATED_SALARY_GOOGLE_UNSUPPORTED',
+      message: 'Google retired estimated salary rich results.',
+      path: 'estimatedSalary',
+      docsUrl: 'https://developers.google.com/search/updates',
+    });
+  }
+  return findings;
+}
+
+/**
+ * @param {string} haystack
+ * @param {string} value
+ */
+function visibleHasText(haystack, value) {
+  const needle = value.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (needle.length < 4) return true;
+  return haystack.includes(needle);
+}
+
+/**
+ * @param {string} haystack
+ * @param {string} price
+ */
+function visibleHasPrice(haystack, price) {
+  const text = String(price).trim();
+  if (!text) return true;
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\d.,])${escaped}(?![\\d])`).test(haystack);
+}
+
+/**
+ * @param {string} haystack
+ * @param {string} phone
+ */
+function visibleHasPhone(haystack, phone) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 7) return true;
+  const hayDigits = haystack.replace(/\D/g, '');
+  return hayDigits.includes(digits);
+}
+
+/**
+ * Conservative markup-vs-visible checks. Missing page text skips the check.
+ * @param {string} haystack
+ * @param {Entity} entity
+ * @returns {Finding[]}
+ */
+function validateVisibleMatch(haystack, entity) {
+  const { types, data, id } = entity;
+  /** @type {Finding[]} */
+  const findings = [];
+
+  /**
+   * @param {string} path
+   * @param {string} label
+   * @param {'text' | 'price' | 'phone'} kind
+   */
+  function check(path, label, kind = 'text') {
+    if (!hasPropertyPath(data, path) && !(path.includes('.') && hasPropertyPath(data, path))) return;
+    const parts = path.split('.');
+    let value = /** @type {unknown} */ (data);
+    for (const part of parts) {
+      if (!value || typeof value !== 'object') return;
+      value = Array.isArray(value)
+        ? /** @type {unknown[]} */ (value)[0]
+        : /** @type {Record<string, unknown>} */ (value)[part];
+    }
+    const text = readName(value) || (typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '');
+    if (!text) return;
+    const ok = kind === 'price'
+      ? visibleHasPrice(haystack, text)
+      : kind === 'phone'
+        ? visibleHasPhone(haystack, text)
+        : visibleHasText(haystack, text);
+    if (!ok) {
+      findings.push({
+        severity: 'warning',
+        code: 'VISIBLE_MISMATCH',
+        message: `${label} "${text}" does not appear in the visible page text.`,
+        entityId: id,
+        path,
+        docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/sd-policies',
+      });
+    }
+  }
+
+  if (types.includes('Product') || types.includes('SoftwareApplication')) {
+    check('name', 'Product name');
+    check('offers.price', 'Offer price', 'price');
+  }
+  if (types.includes('NewsArticle') || types.includes('Article') || types.includes('BlogPosting')) {
+    check('headline', 'Headline');
+    if (!hasProperty(data, 'headline')) check('name', 'Article name');
+  }
+  if (types.includes('Recipe') || types.includes('Event') || types.includes('Movie') || types.includes('VacationRental')) {
+    check('name', `${types[0]} name`);
+  }
+  if (types.includes('JobPosting')) {
+    check('title', 'Job title');
+  }
+  if (isLocalBusiness(types)) {
+    check('name', 'Business name');
+    check('telephone', 'Telephone', 'phone');
+  }
+  return findings;
+}
+
+/**
  * @param {Record<string, unknown>} rating
  * @param {string} path
  * @returns {Finding[]}
@@ -2143,7 +2589,9 @@ function validateEntity(entity, entities) {
   }
 
   for (const rule of RICH_RESULT_RULES.filter((candidate) => {
-    return types.includes(candidate.type) || (candidate.type === 'LocalBusiness' && isLocalBusiness(types));
+    return types.includes(candidate.type)
+      || (candidate.type === 'LocalBusiness' && isLocalBusiness(types))
+      || (candidate.type === 'Organization' && isOrganization(types));
   })) {
     for (const req of rule.required) {
       if (!hasEntityPropertyPath(data, req, entities)) {
@@ -2242,6 +2690,14 @@ function validateEntity(entity, entities) {
   }
 
   findings.push(...validateNestedMerchantReturnPolicies(data).map((f) => ({ ...f, entityId: id })));
+  findings.push(...validateNestedType(data, 'MemberProgram', validateMemberProgram).map((f) => ({ ...f, entityId: id })));
+
+  if (types.includes('Product')) {
+    findings.push(...validateMerchantListing(data, entities).map((f) => ({ ...f, entityId: id })));
+  }
+
+  findings.push(...validatePaywallAndSpeakable(types, data).map((f) => ({ ...f, entityId: id })));
+  findings.push(...validateRetiredFeatureHints(types, data).map((f) => ({ ...f, entityId: id })));
 
   if (hasPackedAuthorName(data)) {
     pushFinding(findings, {
@@ -2414,8 +2870,13 @@ function validate(snapshot, entities) {
     }
   }
 
+  const visibleText = typeof snapshot.visibleText === 'string'
+    ? snapshot.visibleText.toLowerCase().replace(/\s+/g, ' ')
+    : '';
+
   for (const entity of entities) {
     findings.push(...validateEntity(entity, entities));
+    if (visibleText) findings.push(...validateVisibleMatch(visibleText, entity));
   }
 
   return findings;
@@ -2435,7 +2896,9 @@ function validate(snapshot, entities) {
 
 function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
-    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)));
+    return entity.types.includes(rule.type)
+      || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)))
+      || (rule.type === 'Organization' && entity.types.some((type) => ORGANIZATION_TYPES.has(type)));
   });
 }
 

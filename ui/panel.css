@@ -577,6 +577,16 @@ body {
   font-weight: 500;
 }
 
+a.tree-docs {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.tree-docs:hover {
+  color: var(--sys-color-primary);
+  text-decoration: underline;
+}
+
 .dt-meta-key {
   color: var(--sys-color-primary);
   font-weight: 600;
