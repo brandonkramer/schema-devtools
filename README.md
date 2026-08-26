@@ -135,13 +135,11 @@ schema/
 │   ├── agent.js             # AI agent JSON bundle & markdown export builders
 │   └── types.js             # JSDoc type definitions
 ├── scripts/                 # CLI & automation tooling
-│   ├── dev.mjs              # Zero-dependency local dev server
-│   ├── test.mjs             # Unified test suite runner
-│   ├── validate-cli.mjs     # Terminal CLI schema validator
-│   ├── audit-rules.mjs      # Automated catalog rule auditor
-│   ├── bundle-engine.mjs    # Engine bundler for classic DevTools script
-│   ├── smoke-engine.mjs     # Engine extraction/score smoke tests
-│   └── smoke-panel.mjs      # Panel UI & selection smoke tests
+│   ├── dev.mjs              # Local sandbox dev server (http://localhost:3333)
+│   ├── test.mjs             # Unified test suite (engine, UI, catalog, guardrails)
+│   ├── bundle.mjs           # Classic engine bundler (devtools/engine.classic.js)
+│   ├── validate.mjs         # Terminal CLI schema validator (files & live URLs)
+│   └── compare.mjs          # Automated comparison with validator.schema.org
 └── icons/                   # Extension icons (16px, 32px, 48px, 128px)
 ```
 
