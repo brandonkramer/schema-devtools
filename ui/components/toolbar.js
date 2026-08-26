@@ -47,7 +47,10 @@ export function Toolbar() {
           {
             type: 'button',
             class: () => `tb-btn tb-btn-dropdown ${store.exportMenuOpen ? 'active' : ''}`,
-            onclick: () => actions.toggleExportMenu(),
+            onclick: (e) => {
+              e.stopPropagation();
+              actions.toggleExportMenu();
+            },
             title: 'Export schema or agent bundles',
           },
           span({ class: 'tb-icon' }, '📋'),
@@ -62,7 +65,8 @@ export function Toolbar() {
                   {
                     type: 'button',
                     class: 'menu-item',
-                    onclick: () => {
+                    onclick: (e) => {
+                      e.stopPropagation();
                       actions.copyJson();
                       actions.closeExportMenu();
                     },
@@ -74,7 +78,8 @@ export function Toolbar() {
                   {
                     type: 'button',
                     class: 'menu-item',
-                    onclick: () => {
+                    onclick: (e) => {
+                      e.stopPropagation();
                       actions.copyScript();
                       actions.closeExportMenu();
                     },
@@ -87,7 +92,8 @@ export function Toolbar() {
                   {
                     type: 'button',
                     class: 'menu-item',
-                    onclick: () => {
+                    onclick: (e) => {
+                      e.stopPropagation();
                       actions.copyBundle();
                       actions.closeExportMenu();
                     },
@@ -99,7 +105,8 @@ export function Toolbar() {
                   {
                     type: 'button',
                     class: 'menu-item',
-                    onclick: () => {
+                    onclick: (e) => {
+                      e.stopPropagation();
                       actions.copyMarkdown();
                       actions.closeExportMenu();
                     },
@@ -111,7 +118,8 @@ export function Toolbar() {
                   {
                     type: 'button',
                     class: 'menu-item',
-                    onclick: () => {
+                    onclick: (e) => {
+                      e.stopPropagation();
                       actions.copyAiPrompt();
                       actions.closeExportMenu();
                     },
@@ -124,7 +132,8 @@ export function Toolbar() {
                   {
                     type: 'button',
                     class: 'menu-item',
-                    onclick: () => {
+                    onclick: (e) => {
+                      e.stopPropagation();
                       actions.downloadJson();
                       actions.closeExportMenu();
                     },

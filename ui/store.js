@@ -35,12 +35,66 @@ export const actions = {
   selectEntity: (_entity, _options) => {},
   inspectSelected: () => {},
   highlightEntity: (_entity) => {},
-  copyJson: () => {},
-  copyScript: () => {},
-  downloadJson: () => {},
-  copyBundle: () => {},
-  copyMarkdown: () => {},
-  copyAiPrompt: () => {},
+  copyJson: () => {
+    const entity = selectedEntity();
+    const text = entity ? JSON.stringify(entity.data, null, 2) : JSON.stringify(store.entities.map((e) => e.data), null, 2);
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+    store.status = 'Copied JSON to clipboard';
+    store.statusError = false;
+  },
+  copyScript: () => {
+    const entity = selectedEntity();
+    const text = entity
+      ? `<script type="application/ld+json">\n${JSON.stringify(entity.data, null, 2)}\n</script>`
+      : store.entities.map((e) => `<script type="application/ld+json">\n${JSON.stringify(e.data, null, 2)}\n</script>`).join('\n\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+    store.status = 'Copied <script> tag to clipboard';
+    store.statusError = false;
+  },
+  downloadJson: () => {
+    const data = {
+      url: store.snapshotUrl,
+      canonical: store.snapshotCanonical,
+      score: store.score,
+      entities: store.entities,
+      findings: store.findings,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schema-report-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    store.status = 'Downloaded JSON report';
+    store.statusError = false;
+  },
+  copyBundle: () => {
+    const bundle = {
+      url: store.snapshotUrl,
+      canonical: store.snapshotCanonical,
+      score: store.score,
+      entities: store.entities.map((e) => ({ id: e.id, types: e.types, format: e.format, data: e.data })),
+      findings: store.findings,
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(JSON.stringify(bundle, null, 2));
+    store.status = 'Copied Agent Bundle to clipboard';
+    store.statusError = false;
+  },
+  copyMarkdown: () => {
+    const md = `# Structured Data Report: ${store.snapshotUrl || 'Page'}\n\nScore: ${store.score?.total ?? '—'}/100 (${store.score?.label ?? 'none'})\n\n## Entities (${store.entities.length})\n${store.entities.map((e) => `- **${e.types.join(', ')}** (${e.format}): ${e.id}`).join('\n')}\n\n## Findings (${store.findings.length})\n${store.findings.map((f) => `- [${f.severity.toUpperCase()}] ${f.code}: ${f.message}`).join('\n')}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(md);
+    store.status = 'Copied Agent Markdown to clipboard';
+    store.statusError = false;
+  },
+  copyAiPrompt: () => {
+    const entity = selectedEntity();
+    const text = entity ? JSON.stringify(entity.data, null, 2) : JSON.stringify(store.entities.map((e) => e.data), null, 2);
+    const prompt = `Here is the structured Schema.org / JSON-LD knowledge graph extracted from ${store.snapshotUrl || 'the page'}:\n\n\`\`\`json\n${text}\n\`\`\`\n\nAnalyze the above semantic entities, relationships, and completeness for search optimization and LLM grounding.`;
+    if (navigator.clipboard) navigator.clipboard.writeText(prompt);
+    store.status = 'Copied AI Prompt to clipboard';
+    store.statusError = false;
+  },
   openRichResults: () => {},
   openSchemaValidator: () => {},
   toggleCollapse: (path) => {
