@@ -56,13 +56,18 @@ const PAGE_WATCH_INSTALL = `(() => {
       return type === 'application/ld+json';
     }
     return el.hasAttribute('itemscope') || el.hasAttribute('itemtype') || el.hasAttribute('itemprop')
-      || el.hasAttribute('itemref') || el.hasAttribute('typeof') || el.hasAttribute('property') || el.hasAttribute('vocab');
+      || el.hasAttribute('itemref') || el.hasAttribute('typeof') || el.hasAttribute('property') || el.hasAttribute('vocab')
+      || (el.hasAttribute('rel') && Boolean(el.closest('[typeof], [vocab], [prefix]')));
   };
   const containsInteresting = (node) => {
     if (interesting(node)) return true;
-    return Boolean(node && node.nodeType === 1 && node.querySelector(
-      'script[type="application/ld+json"], [itemscope], [itemtype], [itemprop], [typeof], [property], [vocab]'
-    ));
+    if (!node || node.nodeType !== 1) return false;
+    for (const match of node.querySelectorAll(
+      'script[type], [itemscope], [itemtype], [itemprop], [itemref], [typeof], [property], [vocab], [prefix], [rel]'
+    )) {
+      if (interesting(match)) return true;
+    }
+    return false;
   };
   const target = document.documentElement || document;
   if (target) {
@@ -74,6 +79,14 @@ const PAGE_WATCH_INSTALL = `(() => {
           if (host && (host.tagName === 'SCRIPT' || interesting(host))) { bump(); return; }
           continue;
         }
+        if (m.type === 'attributes' && m.oldValue !== null) {
+          const name = m.attributeName;
+          const oldType = name === 'type' && String(m.oldValue).split(';', 1)[0].trim().toLowerCase();
+          if (
+            oldType === 'application/ld+json' ||
+            ['itemscope', 'itemtype', 'itemprop', 'itemref', 'typeof', 'property', 'vocab', 'prefix', 'rel'].includes(name)
+          ) { bump(); return; }
+        }
         if (interesting(m.target)) { bump(); return; }
         for (const n of m.addedNodes) { if (containsInteresting(n)) { bump(); return; } }
         for (const n of m.removedNodes) { if (containsInteresting(n)) { bump(); return; } }
@@ -84,6 +97,7 @@ const PAGE_WATCH_INSTALL = `(() => {
       childList: true,
       characterData: true,
       attributes: true,
+      attributeOldValue: true,
       attributeFilter: [
         'type', 'itemscope', 'itemtype', 'itemprop', 'itemref', 'typeof', 'property', 'vocab',
         'content', 'href', 'src', 'data', 'datetime', 'itemid', 'resource', 'about', 'prefix', 'rel',

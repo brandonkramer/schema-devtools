@@ -180,6 +180,33 @@ assert(hasCode(invalidDate, 'INVALID_DATE'));
 assert.equal(isIso8601Date('2026-01-01T12:00:00+99:99'), false);
 assert.equal(isIso4217Currency('ZZZ'), false);
 
+// Robots meta validations
+const noindexSnapshot = {
+  url: 'https://example.test/noindex',
+  title: 'Noindex Page',
+  canonical: null,
+  robots: 'noindex, nofollow',
+  inspectedAt: '',
+  jsonld: [],
+  microdata: [],
+  rdfa: [],
+};
+const noindexFindings = validate(noindexSnapshot, []);
+assert(noindexFindings.some((f) => f.code === 'ROBOTS_NOINDEX'), 'Must detect ROBOTS_NOINDEX');
+
+const nosnippetSnapshot = {
+  url: 'https://example.test/nosnippet',
+  title: 'Nosnippet Page',
+  canonical: null,
+  robots: 'nosnippet, max-snippet:0',
+  inspectedAt: '',
+  jsonld: [],
+  microdata: [],
+  rdfa: [],
+};
+const nosnippetFindings = validate(nosnippetSnapshot, []);
+assert(nosnippetFindings.some((f) => f.code === 'ROBOTS_NOSNIPPET'), 'Must detect ROBOTS_NOSNIPPET');
+
 // Current Google feature requirements and nested markup normalization
 const course = runInspect({ '@context': 'https://schema.org', '@type': 'Course', name: 'Course', description: 'Description' });
 assert(!hasCode(course, 'MISSING_PROVIDER'));
@@ -257,6 +284,8 @@ assert.equal(typeof EXTRACT_SOURCE, 'string');
 assert(EXTRACT_SOURCE.includes('JSON.stringify(data)'));
 assert(EXTRACT_SOURCE.includes("rel.includes('describedby')"));
 assert(!EXTRACT_SOURCE.includes('navigator.modelContext'));
+assert(EXTRACT_SOURCE.includes("propEl.querySelectorAll('[typeof]')"), 'RDFa rel wrappers must resolve nested typed values.');
+assert(!EXTRACT_SOURCE.includes('properties.vocab = vocab'), 'RDFa vocab declarations must not become entity properties.');
 
 // Manifest Checks
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
@@ -272,6 +301,70 @@ assert(!panelSource.includes('window.__SCHEMA_DEVTOOLS__ ='));
 assert(panelSource.includes('PAGE_WATCH_REMOVE'));
 assert(panelSource.includes('containsInteresting'));
 assert(panelSource.includes("Symbol.for('schema-devtools.watch')"));
+assert(panelSource.includes('attributeOldValue: true'));
+
+function readTemplateConstant(source, name) {
+  const startMarker = `const ${name} = \``;
+  const start = source.indexOf(startMarker);
+  assert(start >= 0, `${name} template must exist`);
+  const bodyStart = start + startMarker.length;
+  const end = source.indexOf('`;', bodyStart);
+  assert(end >= 0, `${name} template must terminate`);
+  return source.slice(bodyStart, end);
+}
+
+let watchObserver;
+const watchTimers = [];
+const watchWindow = {
+  addEventListener() {},
+  removeEventListener() {},
+};
+const watchRoot = {
+  nodeType: 1,
+  tagName: 'HTML',
+  getAttribute() { return null; },
+  hasAttribute() { return false; },
+  closest() { return null; },
+  querySelectorAll() { return []; },
+};
+class WatchMutationObserver {
+  constructor(callback) {
+    this.callback = callback;
+    watchObserver = this;
+  }
+  observe(target, options) {
+    this.target = target;
+    this.options = options;
+  }
+  disconnect() {}
+}
+const watchHistory = {
+  pushState() {},
+  replaceState() {},
+};
+vm.runInNewContext(readTemplateConstant(panelSource, 'PAGE_WATCH_INSTALL'), {
+  window: watchWindow,
+  document: { documentElement: watchRoot },
+  history: watchHistory,
+  MutationObserver: WatchMutationObserver,
+  setTimeout(callback) {
+    watchTimers.push(callback);
+    return watchTimers.length;
+  },
+  clearTimeout() {},
+});
+assert.equal(watchObserver.options.attributeOldValue, true);
+watchObserver.callback([{
+  type: 'attributes',
+  target: watchRoot,
+  attributeName: 'typeof',
+  oldValue: 'Product',
+  addedNodes: [],
+  removedNodes: [],
+}]);
+assert.equal(watchTimers.length, 1, 'Removing the final schema attribute must schedule a live update.');
+watchTimers.shift()();
+assert.equal(watchWindow[Symbol.for('schema-devtools.watch')].generation, 2);
 
 console.log('✅ Passed');
 

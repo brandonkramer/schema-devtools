@@ -781,7 +781,26 @@ export function validate(snapshot, entities) {
       code: 'NO_SCHEMA',
       message: 'No structured data (JSON-LD, Microdata, or RDFa) found on this page.',
     });
-    return findings;
+  }
+
+  if (snapshot.robots && typeof snapshot.robots === 'string') {
+    const robotsLower = snapshot.robots.toLowerCase();
+    if (robotsLower.includes('noindex')) {
+      pushFinding(findings, {
+        severity: 'warning',
+        code: 'ROBOTS_NOINDEX',
+        message: 'Page meta robots contains "noindex". Google will not index this page or display its rich results in search.',
+        docsUrl: 'https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag',
+      });
+    }
+    if (robotsLower.includes('nosnippet') || robotsLower.includes('max-snippet:0')) {
+      pushFinding(findings, {
+        severity: 'warning',
+        code: 'ROBOTS_NOSNIPPET',
+        message: 'Page meta robots contains "nosnippet" or "max-snippet:0". Google will not display text snippets or rich result previews for this page.',
+        docsUrl: 'https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag',
+      });
+    }
   }
 
   for (const entity of entities) {

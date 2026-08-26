@@ -238,10 +238,21 @@ function extractPageSchema() {
 
       const names = propEl.getAttribute('property') ?? propEl.getAttribute('rel');
       if (!names) continue;
+      const expandedNames = names.split(/\s+/).filter(Boolean).map((name) => expandRdfaTerm(name, propEl)).join(' ');
+      const nestedTypes = propEl.hasAttribute('typeof')
+        ? [propEl]
+        : Array.from(propEl.querySelectorAll('[typeof]')).filter((node) => {
+            return node.parentElement?.closest('[typeof]') === el;
+          });
+      if (nestedTypes.length) {
+        for (const node of nestedTypes) {
+          addProperties(props, expandedNames, buildRdfaNode(node, depth + 1));
+        }
+        continue;
+      }
+
       let value;
-      if (propEl.hasAttribute('typeof')) {
-        value = buildRdfaNode(propEl, depth + 1);
-      } else if (propEl.hasAttribute('content')) {
+      if (propEl.hasAttribute('content')) {
         value = propEl.getAttribute('content');
       } else if (propEl.tagName === 'A' || propEl.tagName === 'LINK') {
         value = propEl.getAttribute('resource') ?? propEl.getAttribute('href') ?? propEl.textContent?.trim() ?? '';
@@ -250,12 +261,7 @@ function extractPageSchema() {
       } else {
         value = propEl.getAttribute('resource') ?? propEl.getAttribute('href') ?? propEl.textContent?.trim().slice(0, MAX_TEXT_CHARS) ?? '';
       }
-
-      addProperties(
-        props,
-        names.split(/\s+/).filter(Boolean).map((name) => expandRdfaTerm(name, propEl)).join(' '),
-        value,
-      );
+      addProperties(props, expandedNames, value);
     }
     return props;
   }
@@ -267,11 +273,9 @@ function extractPageSchema() {
   function buildRdfaNode(el, depth = 0) {
     const typeofAttr = el.getAttribute('typeof') ?? '';
     const types = typeofAttr.split(/\s+/).filter(Boolean).map((type) => expandRdfaTerm(type, el));
-    const vocab = el.getAttribute('vocab') ?? el.closest('[vocab]')?.getAttribute('vocab') ?? '';
     const resource = el.getAttribute('resource') ?? el.getAttribute('about') ?? el.getAttribute('href') ?? '';
     const properties = depth >= MAX_NESTING ? {} : extractRdfaProps(el, depth);
     if (resource) properties['@id'] = resource;
-    if (vocab) properties.vocab = vocab;
     const type = types.length === 1 ? types[0] : types.length ? types : 'Thing';
     return {
       format: 'rdfa',
@@ -309,7 +313,16 @@ function extractPageSchema() {
     const typeEls = document.querySelectorAll('[typeof]');
     for (const el of typeEls) {
       const parentType = el.parentElement?.closest('[typeof]');
-      if ((!el.hasAttribute('property') && !el.hasAttribute('rel')) || !parentType) {
+      let relation = false;
+      let node = el;
+      while (node && node !== parentType) {
+        if (node.hasAttribute('property') || node.hasAttribute('rel')) {
+          relation = true;
+          break;
+        }
+        node = node.parentElement;
+      }
+      if (!parentType || !relation) {
         items.push(buildRdfaNode(el));
         if (items.length >= MAX_MARKUP_NODES) break;
       }
@@ -412,13 +425,16 @@ function extractPageSchema() {
   }
 
   const canonicalEl = document.querySelector('link[rel="canonical"]');
-  const robotsEl = document.querySelector('meta[name="robots"]');
+  const robotsMeta = Array.from(document.querySelectorAll('meta[name="robots" i], meta[name="googlebot" i]'))
+    .map((el) => el.getAttribute('content') || '')
+    .filter(Boolean)
+    .join(', ');
 
   return {
     url: location.href,
     title: document.title ?? '',
     canonical: canonicalEl?.getAttribute('href') ?? null,
-    robots: robotsEl?.getAttribute('content') ?? null,
+    robots: robotsMeta || null,
     inspectedAt: new Date().toISOString(),
     jsonld: extractJsonLd(),
     microdata: extractMicrodata(),
@@ -1888,7 +1904,26 @@ function validate(snapshot, entities) {
       code: 'NO_SCHEMA',
       message: 'No structured data (JSON-LD, Microdata, or RDFa) found on this page.',
     });
-    return findings;
+  }
+
+  if (snapshot.robots && typeof snapshot.robots === 'string') {
+    const robotsLower = snapshot.robots.toLowerCase();
+    if (robotsLower.includes('noindex')) {
+      pushFinding(findings, {
+        severity: 'warning',
+        code: 'ROBOTS_NOINDEX',
+        message: 'Page meta robots contains "noindex". Google will not index this page or display its rich results in search.',
+        docsUrl: 'https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag',
+      });
+    }
+    if (robotsLower.includes('nosnippet') || robotsLower.includes('max-snippet:0')) {
+      pushFinding(findings, {
+        severity: 'warning',
+        code: 'ROBOTS_NOSNIPPET',
+        message: 'Page meta robots contains "nosnippet" or "max-snippet:0". Google will not display text snippets or rich result previews for this page.',
+        docsUrl: 'https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag',
+      });
+    }
   }
 
   for (const entity of entities) {

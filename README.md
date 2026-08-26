@@ -21,6 +21,7 @@ All analysis runs **100% locally in your browser** — zero host permissions, ze
 - 🎯 **In-Page DOM Highlighting** — Hovering or clicking an entity outlines its corresponding visual DOM node on the live webpage.
 - 🧭 **Inspect in Elements** — Optional reveal of the source node in the Elements panel (button or Alt-click). Ordinary clicks stay on the Schema tab.
 - 🤖 **AI & GEO (Generative Engine Optimization) Readiness** — One-click **Copy for AI Prompt**, **Copy Agent Bundle** (JSON), and **Copy Agent Markdown** for seamless integration with LLMs and AI search engines.
+- 🛑 **Indexability & Robots Guards** — Detects conflicting `<meta name="robots">` or `<meta name="googlebot">` directives (`noindex`, `nosnippet`, `max-snippet:0`) that silently block Google from displaying rich results in search.
 - 🔗 **External Validators** — Direct one-click links to Google Rich Results Test and `validator.schema.org` (opens with encoded page URL only on explicit click).
 - 🌓 **Native Theme Parity** — Uses Chrome DevTools system colors and follows the `default` / `dark` theme.
 
