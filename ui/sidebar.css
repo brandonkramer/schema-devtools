@@ -1,9 +1,19 @@
-body {
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   background: var(--sys-color-base);
 }
 
 .sidebar {
   padding: 10px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .empty {
