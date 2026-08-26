@@ -13,9 +13,9 @@ const { div, span, p, button, main, section, footer } = van.tags;
 const VIEWS = [
   ['tree', 'Tree'],
   ['raw', 'Raw JSON'],
+  ['graph', 'Graph'],
   ['findings', 'Findings'],
   ['serp', 'SERP Preview'],
-  ['graph', 'Graph'],
 ];
 
 function EmptyDetail(title, desc, icon = '🔍') {

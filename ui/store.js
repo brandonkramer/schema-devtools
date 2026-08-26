@@ -5,7 +5,7 @@ import vanX from '../vendor/van-x.js';
 export const store = vanX.reactive({
   theme: 'default',
   query: '',
-  activeView: /** @type {'tree' | 'raw' | 'findings' | 'serp' | 'graph'} */ ('tree'),
+  activeView: /** @type {'tree' | 'raw' | 'graph' | 'findings' | 'serp'} */ ('tree'),
   status: '',
   statusError: false,
   fatal: '',
