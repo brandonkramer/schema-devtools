@@ -96,14 +96,15 @@ const SIDEBAR_INSPECT_SOURCE = `(() => { try { return JSON.stringify((${function
       ? typeofAttr.split(/\s+/).map((type) => stripSchemaOrg(type, rdfaRoot)).filter(Boolean)
       : ['Thing'];
     const properties = {};
-    const propNodes = rdfaRoot.querySelectorAll('[property]');
+    const propNodes = rdfaRoot.querySelectorAll('[property], [rel]');
     propNodes.forEach((node) => {
-      const names = (node.getAttribute('property') || '')
+      const names = (node.getAttribute('property') || node.getAttribute('rel') || '')
         .split(/\s+/)
         .filter(Boolean)
         .map((name) => stripSchemaOrg(name, node));
       const value =
         node.getAttribute('content') ||
+        node.getAttribute('resource') ||
         node.getAttribute('href') ||
         node.textContent?.trim().slice(0, 120) ||
         '';
@@ -118,7 +119,7 @@ const SIDEBAR_INSPECT_SOURCE = `(() => { try { return JSON.stringify((${function
       sourceRoot = parentType;
     }
     const topTypes = Array.from(document.querySelectorAll('[typeof]')).filter((node) => {
-      return !node.hasAttribute('property') || !node.parentElement?.closest('[typeof]');
+      return (!node.hasAttribute('property') && !node.hasAttribute('rel')) || !node.parentElement?.closest('[typeof]');
     });
     return {
       empty: false,

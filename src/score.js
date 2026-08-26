@@ -8,6 +8,19 @@
 /** @typedef {import('./types.js').ScoreResult} ScoreResult */
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
+import { RICH_RESULT_RULES } from './catalog/rich-results.js';
+
+const SCORE_LOCAL_BUSINESS_TYPES = new Set([
+  'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'AutomotiveBusiness',
+  'FinancialService', 'LodgingBusiness', 'MedicalBusiness', 'ProfessionalService',
+]);
+
+function matchingRules(entity) {
+  return RICH_RESULT_RULES.filter((rule) => {
+    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => SCORE_LOCAL_BUSINESS_TYPES.has(type)));
+  });
+}
+
 /**
  * @param {number} total
  * @returns {ScoreLabel}
@@ -24,13 +37,10 @@ function labelFromTotal(total) {
  * @returns {number}
  */
 function coverageBonus(entities) {
-  if (entities.length === 0) return 0;
-  const formats = new Set(entities.map((e) => e.format));
-  let bonus = Math.min(entities.length * 2, 10);
-  bonus += formats.size * 3;
-  const typed = entities.filter((e) => e.types.length > 0).length;
-  bonus += Math.min(typed * 1, 5);
-  return Math.min(bonus, 15);
+  const qualifying = entities.filter((entity) => matchingRules(entity).length > 0);
+  if (qualifying.length === 0) return 0;
+  const formats = new Set(qualifying.map((entity) => entity.format));
+  return Math.min(qualifying.length * 5 + formats.size * 5, 15);
 }
 
 /**
@@ -40,8 +50,12 @@ function coverageBonus(entities) {
 function richnessBonus(entities) {
   let bonus = 0;
   for (const entity of entities) {
-    const propCount = Object.keys(entity.data).filter((k) => !k.startsWith('@')).length;
-    bonus += Math.min(propCount, 5);
+    const meaningful = new Set(
+      matchingRules(entity).flatMap((rule) => [...rule.required, ...rule.recommended]),
+    );
+    for (const property of meaningful) {
+      if (property in entity.data) bonus += 1;
+    }
   }
   return Math.min(bonus, 15);
 }
@@ -66,15 +80,12 @@ export function score(findings, entities) {
     };
   }
 
+  const qualifying = entities.some((entity) => matchingRules(entity).length > 0);
   const coverage = coverageBonus(entities);
   const richness = richnessBonus(entities);
-  let total = 70;
-  total += coverage;
-  total += richness;
-  total -= errorCount * 12;
-  total -= warningCount * 4;
-
-  const validity = Math.max(0, Math.min(40, 40 - errorCount * 8 - warningCount * 2));
+  const baseValidity = qualifying ? 70 : 40;
+  const validity = Math.max(0, baseValidity - errorCount * 12 - warningCount * 4);
+  let total = validity + coverage + richness;
 
   total = Math.round(Math.max(0, Math.min(100, total)));
 

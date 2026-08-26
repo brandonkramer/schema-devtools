@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 import { normalize } from '../src/normalize.js';
 import { validate } from '../src/validate.js';
 import { score } from '../src/score.js';
@@ -18,7 +18,7 @@ Usage:
   node scripts/validate.mjs <file.json | file.html | https://url>
 
 Examples:
-  npm run validate ./sandbox/fixtures.js
+  npm run validate ./path/to/schema.json
   npm run validate https://example.com/product
 `);
   process.exit(1);
@@ -34,6 +34,7 @@ async function run() {
       const res = await fetch(target, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) SchemaDT-CLI/1.0' },
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       content = await res.text();
     } catch (e) {
       console.error(`❌ Failed to fetch ${target}:`, e.message);
@@ -47,6 +48,10 @@ async function run() {
     }
     content = readFileSync(fullPath, 'utf8');
     url = `file://${fullPath}`;
+    if (['.js', '.mjs', '.cjs'].includes(extname(fullPath).toLowerCase())) {
+      console.error('❌ JavaScript modules are not schema input. Pass a JSON-LD or HTML file instead.');
+      process.exit(1);
+    }
   }
 
   let snapshot;
@@ -129,6 +134,7 @@ async function run() {
     console.log('\n✅ All Schema.org & Google Rich-Result checks passed cleanly!');
   }
   console.log('============================================================\n');
+  if (quality.errorCount > 0) process.exitCode = 1;
 }
 
 run();

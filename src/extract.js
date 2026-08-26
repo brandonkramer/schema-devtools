@@ -9,6 +9,12 @@
  * @returns {import('./types.js').PageSnapshot}
  */
 export function extractPageSchema() {
+  const MAX_JSONLD_BLOCKS = 100;
+  const MAX_JSONLD_CHARS = 500_000;
+  const MAX_MARKUP_NODES = 500;
+  const MAX_NESTING = 50;
+  const MAX_TEXT_CHARS = 100_000;
+
   /** @param {Element} el */
   function buildSelector(el) {
     if (el.id) {
@@ -16,7 +22,8 @@ export function extractPageSchema() {
     }
     const parts = [];
     let node = el;
-    while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement) {
+    let depth = 0;
+    while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement && depth++ < MAX_NESTING) {
       if (node.id) {
         parts.unshift(`#${CSS.escape(node.id)}`);
         break;
@@ -103,7 +110,7 @@ export function extractPageSchema() {
    * @param {Element} scope
    * @returns {Record<string, unknown>}
    */
-  function extractMicrodataProps(scope) {
+  function extractMicrodataProps(scope, depth = 0) {
     const props = /** @type {Record<string, unknown>} */ ({});
     /** @type {Array<{el: Element; root: Element}>} */
     const propEls = [];
@@ -129,7 +136,7 @@ export function extractPageSchema() {
 
       let value;
       if (el.hasAttribute('itemscope')) {
-        value = buildMicrodataItem(el);
+        value = buildMicrodataItem(el, depth + 1);
       } else {
         value = readMicrodataValue(el);
       }
@@ -175,18 +182,18 @@ export function extractPageSchema() {
     if (tag === 'OBJECT') {
       return el.getAttribute('data') ?? '';
     }
-    return el.textContent?.trim() ?? '';
+    return el.textContent?.trim().slice(0, MAX_TEXT_CHARS) ?? '';
   }
 
   /**
    * @param {Element} el
    * @returns {import('./types.js').MarkupNode}
    */
-  function buildMicrodataItem(el) {
+  function buildMicrodataItem(el, depth = 0) {
     const itemtype = el.getAttribute('itemtype') ?? '';
     const types = itemtype.split(/\s+/).filter(Boolean);
     const type = types.length === 1 ? types[0] : types;
-    const properties = extractMicrodataProps(el);
+    const properties = depth >= MAX_NESTING ? {} : extractMicrodataProps(el, depth);
     const itemid = el.getAttribute('itemid');
     if (itemid) properties['@id'] = itemid;
     return {
@@ -205,6 +212,7 @@ export function extractPageSchema() {
       // An item is top-level when it is not itself a property of another item.
       if (!el.hasAttribute('itemprop')) {
         items.push(buildMicrodataItem(el));
+        if (items.length >= MAX_MARKUP_NODES) break;
       }
     }
     return items;
@@ -214,9 +222,9 @@ export function extractPageSchema() {
    * @param {Element} el
    * @returns {Record<string, unknown>}
    */
-  function extractRdfaProps(el) {
+  function extractRdfaProps(el, depth = 0) {
     const props = /** @type {Record<string, unknown>} */ ({});
-    const propEls = el.querySelectorAll('[property]');
+    const propEls = el.querySelectorAll('[property], [rel]');
     for (const propEl of propEls) {
       if (!el.contains(propEl) || propEl === el) continue;
       let between = propEl.parentElement;
@@ -226,19 +234,19 @@ export function extractPageSchema() {
       }
       if (between && between !== el) continue;
 
-      const names = propEl.getAttribute('property');
+      const names = propEl.getAttribute('property') ?? propEl.getAttribute('rel');
       if (!names) continue;
       let value;
       if (propEl.hasAttribute('typeof')) {
-        value = buildRdfaNode(propEl);
+        value = buildRdfaNode(propEl, depth + 1);
       } else if (propEl.hasAttribute('content')) {
         value = propEl.getAttribute('content');
       } else if (propEl.tagName === 'A' || propEl.tagName === 'LINK') {
-        value = propEl.getAttribute('href') ?? propEl.textContent?.trim() ?? '';
+        value = propEl.getAttribute('resource') ?? propEl.getAttribute('href') ?? propEl.textContent?.trim() ?? '';
       } else if (propEl.tagName === 'IMG') {
         value = propEl.getAttribute('src') ?? '';
       } else {
-        value = propEl.textContent?.trim() ?? '';
+        value = propEl.getAttribute('resource') ?? propEl.getAttribute('href') ?? propEl.textContent?.trim().slice(0, MAX_TEXT_CHARS) ?? '';
       }
 
       addProperties(
@@ -254,12 +262,12 @@ export function extractPageSchema() {
    * @param {Element} el
    * @returns {import('./types.js').MarkupNode}
    */
-  function buildRdfaNode(el) {
+  function buildRdfaNode(el, depth = 0) {
     const typeofAttr = el.getAttribute('typeof') ?? '';
     const types = typeofAttr.split(/\s+/).filter(Boolean).map((type) => expandRdfaTerm(type, el));
     const vocab = el.getAttribute('vocab') ?? el.closest('[vocab]')?.getAttribute('vocab') ?? '';
     const resource = el.getAttribute('resource') ?? el.getAttribute('about') ?? el.getAttribute('href') ?? '';
-    const properties = extractRdfaProps(el);
+    const properties = depth >= MAX_NESTING ? {} : extractRdfaProps(el, depth);
     if (resource) properties['@id'] = resource;
     if (vocab) properties.vocab = vocab;
     const type = types.length === 1 ? types[0] : types.length ? types : 'Thing';
@@ -299,8 +307,9 @@ export function extractPageSchema() {
     const typeEls = document.querySelectorAll('[typeof]');
     for (const el of typeEls) {
       const parentType = el.parentElement?.closest('[typeof]');
-      if (!el.hasAttribute('property') || !parentType) {
+      if ((!el.hasAttribute('property') && !el.hasAttribute('rel')) || !parentType) {
         items.push(buildRdfaNode(el));
+        if (items.length >= MAX_MARKUP_NODES) break;
       }
     }
     return items;
@@ -311,18 +320,30 @@ export function extractPageSchema() {
     const scripts = Array.from(document.querySelectorAll('script[type]')).filter(isJsonLdScript);
     const blocks = [];
     let domIndex = 0;
-    for (const script of scripts) {
-      const raw = script.textContent ?? '';
-      const { parsed, parseError } = parseJsonLd(raw);
+    for (const script of scripts.slice(0, MAX_JSONLD_BLOCKS)) {
+      const fullRaw = script.textContent ?? '';
+      const raw = fullRaw.slice(0, MAX_JSONLD_CHARS);
+      const result = fullRaw.length > MAX_JSONLD_CHARS
+        ? { parsed: null, parseError: { message: `JSON-LD block exceeds ${MAX_JSONLD_CHARS} characters and was skipped.` } }
+        : parseJsonLd(raw);
       blocks.push({
         index: blocks.length,
         raw,
-        parsed,
-        parseError,
+        parsed: result.parsed,
+        parseError: result.parseError,
         selector: buildSelector(script),
         domIndex,
       });
       domIndex++;
+    }
+    if (scripts.length > MAX_JSONLD_BLOCKS) {
+      blocks.push({
+        index: blocks.length,
+        raw: '',
+        parsed: null,
+        parseError: { message: `JSON-LD extraction stopped after ${MAX_JSONLD_BLOCKS} blocks.` },
+        selector: 'jsonld:truncated',
+      });
     }
     return blocks;
   }
@@ -356,9 +377,10 @@ export function extractPageSchema() {
             return out;
           });
         }
-        modelContext = Object.keys(serialized).length
-          ? JSON.parse(JSON.stringify(serialized))
-          : null;
+        const encoded = JSON.stringify(serialized);
+        modelContext = encoded.length <= MAX_JSONLD_CHARS
+          ? JSON.parse(encoded)
+          : { truncated: true, message: 'Model context metadata exceeds the export limit.' };
       } catch {
         modelContext = null;
       }

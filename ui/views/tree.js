@@ -54,7 +54,8 @@ export function previewObject(obj) {
   return `{ ${first} }`;
 }
 
-export function TreeValue(value, idMap, path = 'root', entityId = '') {
+export function TreeValue(value, idMap, path = 'root', entityId = '', depth = 0) {
+  if (depth > 50) return span({ class: 'dt-dim' }, '… nested data omitted');
   if (value === null || typeof value !== 'object') {
     return Scalar(value, idMap);
   }
@@ -88,7 +89,7 @@ export function TreeValue(value, idMap, path = 'root', entityId = '') {
                 return div(
                   { class: 'tree-node' },
                   span({ class: 'dt-index' }, `${index}:`),
-                  TreeValue(item, idMap, childPath, entityId),
+                   TreeValue(item, idMap, childPath, entityId, depth + 1),
                 );
               }),
             ),
@@ -134,7 +135,7 @@ export function TreeValue(value, idMap, path = 'root', entityId = '') {
                   : target && !Array.isArray(val) && Object.keys(/** @type {object} */ (val)).length <= 2
                     ? EntityLink(target, String(/** @type {Record<string, unknown>} */ (val)['@id'] || target.id))
                     : isNested
-                      ? TreeValue(val, idMap, childPath, entityId)
+                       ? TreeValue(val, idMap, childPath, entityId, depth + 1)
                       : Scalar(val, idMap),
               );
             }),

@@ -11,6 +11,12 @@
  * @returns {import('./types.js').PageSnapshot}
  */
 function extractPageSchema() {
+  const MAX_JSONLD_BLOCKS = 100;
+  const MAX_JSONLD_CHARS = 500_000;
+  const MAX_MARKUP_NODES = 500;
+  const MAX_NESTING = 50;
+  const MAX_TEXT_CHARS = 100_000;
+
   /** @param {Element} el */
   function buildSelector(el) {
     if (el.id) {
@@ -18,7 +24,8 @@ function extractPageSchema() {
     }
     const parts = [];
     let node = el;
-    while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement) {
+    let depth = 0;
+    while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement && depth++ < MAX_NESTING) {
       if (node.id) {
         parts.unshift(`#${CSS.escape(node.id)}`);
         break;
@@ -105,7 +112,7 @@ function extractPageSchema() {
    * @param {Element} scope
    * @returns {Record<string, unknown>}
    */
-  function extractMicrodataProps(scope) {
+  function extractMicrodataProps(scope, depth = 0) {
     const props = /** @type {Record<string, unknown>} */ ({});
     /** @type {Array<{el: Element; root: Element}>} */
     const propEls = [];
@@ -131,7 +138,7 @@ function extractPageSchema() {
 
       let value;
       if (el.hasAttribute('itemscope')) {
-        value = buildMicrodataItem(el);
+        value = buildMicrodataItem(el, depth + 1);
       } else {
         value = readMicrodataValue(el);
       }
@@ -177,18 +184,18 @@ function extractPageSchema() {
     if (tag === 'OBJECT') {
       return el.getAttribute('data') ?? '';
     }
-    return el.textContent?.trim() ?? '';
+    return el.textContent?.trim().slice(0, MAX_TEXT_CHARS) ?? '';
   }
 
   /**
    * @param {Element} el
    * @returns {import('./types.js').MarkupNode}
    */
-  function buildMicrodataItem(el) {
+  function buildMicrodataItem(el, depth = 0) {
     const itemtype = el.getAttribute('itemtype') ?? '';
     const types = itemtype.split(/\s+/).filter(Boolean);
     const type = types.length === 1 ? types[0] : types;
-    const properties = extractMicrodataProps(el);
+    const properties = depth >= MAX_NESTING ? {} : extractMicrodataProps(el, depth);
     const itemid = el.getAttribute('itemid');
     if (itemid) properties['@id'] = itemid;
     return {
@@ -207,6 +214,7 @@ function extractPageSchema() {
       // An item is top-level when it is not itself a property of another item.
       if (!el.hasAttribute('itemprop')) {
         items.push(buildMicrodataItem(el));
+        if (items.length >= MAX_MARKUP_NODES) break;
       }
     }
     return items;
@@ -216,9 +224,9 @@ function extractPageSchema() {
    * @param {Element} el
    * @returns {Record<string, unknown>}
    */
-  function extractRdfaProps(el) {
+  function extractRdfaProps(el, depth = 0) {
     const props = /** @type {Record<string, unknown>} */ ({});
-    const propEls = el.querySelectorAll('[property]');
+    const propEls = el.querySelectorAll('[property], [rel]');
     for (const propEl of propEls) {
       if (!el.contains(propEl) || propEl === el) continue;
       let between = propEl.parentElement;
@@ -228,19 +236,19 @@ function extractPageSchema() {
       }
       if (between && between !== el) continue;
 
-      const names = propEl.getAttribute('property');
+      const names = propEl.getAttribute('property') ?? propEl.getAttribute('rel');
       if (!names) continue;
       let value;
       if (propEl.hasAttribute('typeof')) {
-        value = buildRdfaNode(propEl);
+        value = buildRdfaNode(propEl, depth + 1);
       } else if (propEl.hasAttribute('content')) {
         value = propEl.getAttribute('content');
       } else if (propEl.tagName === 'A' || propEl.tagName === 'LINK') {
-        value = propEl.getAttribute('href') ?? propEl.textContent?.trim() ?? '';
+        value = propEl.getAttribute('resource') ?? propEl.getAttribute('href') ?? propEl.textContent?.trim() ?? '';
       } else if (propEl.tagName === 'IMG') {
         value = propEl.getAttribute('src') ?? '';
       } else {
-        value = propEl.textContent?.trim() ?? '';
+        value = propEl.getAttribute('resource') ?? propEl.getAttribute('href') ?? propEl.textContent?.trim().slice(0, MAX_TEXT_CHARS) ?? '';
       }
 
       addProperties(
@@ -256,12 +264,12 @@ function extractPageSchema() {
    * @param {Element} el
    * @returns {import('./types.js').MarkupNode}
    */
-  function buildRdfaNode(el) {
+  function buildRdfaNode(el, depth = 0) {
     const typeofAttr = el.getAttribute('typeof') ?? '';
     const types = typeofAttr.split(/\s+/).filter(Boolean).map((type) => expandRdfaTerm(type, el));
     const vocab = el.getAttribute('vocab') ?? el.closest('[vocab]')?.getAttribute('vocab') ?? '';
     const resource = el.getAttribute('resource') ?? el.getAttribute('about') ?? el.getAttribute('href') ?? '';
-    const properties = extractRdfaProps(el);
+    const properties = depth >= MAX_NESTING ? {} : extractRdfaProps(el, depth);
     if (resource) properties['@id'] = resource;
     if (vocab) properties.vocab = vocab;
     const type = types.length === 1 ? types[0] : types.length ? types : 'Thing';
@@ -301,8 +309,9 @@ function extractPageSchema() {
     const typeEls = document.querySelectorAll('[typeof]');
     for (const el of typeEls) {
       const parentType = el.parentElement?.closest('[typeof]');
-      if (!el.hasAttribute('property') || !parentType) {
+      if ((!el.hasAttribute('property') && !el.hasAttribute('rel')) || !parentType) {
         items.push(buildRdfaNode(el));
+        if (items.length >= MAX_MARKUP_NODES) break;
       }
     }
     return items;
@@ -313,18 +322,30 @@ function extractPageSchema() {
     const scripts = Array.from(document.querySelectorAll('script[type]')).filter(isJsonLdScript);
     const blocks = [];
     let domIndex = 0;
-    for (const script of scripts) {
-      const raw = script.textContent ?? '';
-      const { parsed, parseError } = parseJsonLd(raw);
+    for (const script of scripts.slice(0, MAX_JSONLD_BLOCKS)) {
+      const fullRaw = script.textContent ?? '';
+      const raw = fullRaw.slice(0, MAX_JSONLD_CHARS);
+      const result = fullRaw.length > MAX_JSONLD_CHARS
+        ? { parsed: null, parseError: { message: `JSON-LD block exceeds ${MAX_JSONLD_CHARS} characters and was skipped.` } }
+        : parseJsonLd(raw);
       blocks.push({
         index: blocks.length,
         raw,
-        parsed,
-        parseError,
+        parsed: result.parsed,
+        parseError: result.parseError,
         selector: buildSelector(script),
         domIndex,
       });
       domIndex++;
+    }
+    if (scripts.length > MAX_JSONLD_BLOCKS) {
+      blocks.push({
+        index: blocks.length,
+        raw: '',
+        parsed: null,
+        parseError: { message: `JSON-LD extraction stopped after ${MAX_JSONLD_BLOCKS} blocks.` },
+        selector: 'jsonld:truncated',
+      });
     }
     return blocks;
   }
@@ -358,9 +379,10 @@ function extractPageSchema() {
             return out;
           });
         }
-        modelContext = Object.keys(serialized).length
-          ? JSON.parse(JSON.stringify(serialized))
-          : null;
+        const encoded = JSON.stringify(serialized);
+        modelContext = encoded.length <= MAX_JSONLD_CHARS
+          ? JSON.parse(encoded)
+          : { truncated: true, message: 'Model context metadata exceeds the export limit.' };
       } catch {
         modelContext = null;
       }
@@ -466,8 +488,8 @@ const RICH_RESULT_RULES = [
   },
   {
     type: 'Recipe',
-    required: ['name'],
-    recommended: ['image', 'author', 'datePublished', 'description', 'recipeIngredient', 'recipeInstructions'],
+    required: ['name', 'image'],
+    recommended: ['author', 'datePublished', 'description', 'recipeIngredient', 'recipeInstructions'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/recipe',
   },
   {
@@ -502,8 +524,8 @@ const RICH_RESULT_RULES = [
   },
   {
     type: 'Course',
-    required: ['name', 'provider'],
-    recommended: ['description', 'offers'],
+    required: ['name', 'description'],
+    recommended: ['provider'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/course',
   },
   {
@@ -544,8 +566,8 @@ const RICH_RESULT_RULES = [
   },
   {
     type: 'Dataset',
-    required: ['name'],
-    recommended: ['description', 'license', 'creator', 'distribution'],
+    required: ['name', 'description'],
+    recommended: ['license', 'creator', 'distribution'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/dataset',
   },
   {
@@ -617,12 +639,13 @@ function hasProperty(data, prop) {
   return hasValue(data[prop]);
 
   /** @param {unknown} val */
-  function hasValue(val) {
+  function hasValue(val, depth = 0) {
+    if (depth > 50) return false;
     if (val === undefined || val === null) return false;
     if (typeof val === 'string' && val.trim() === '') return false;
-    if (Array.isArray(val)) return val.some(hasValue);
+    if (Array.isArray(val)) return val.some((item) => hasValue(item, depth + 1));
     if (typeof val === 'object') {
-      return Object.values(/** @type {Record<string, unknown>} */ (val)).some(hasValue);
+      return Object.values(/** @type {Record<string, unknown>} */ (val)).some((item) => hasValue(item, depth + 1));
     }
     return true;
   }
@@ -645,7 +668,7 @@ function isRelativeUrl(val) {
 
 const URL_PROPS = new Set([
   'url', 'image', 'logo', 'contentUrl', 'thumbnailUrl', 'embedUrl',
-  'sameAs', 'item', 'target', 'urlTemplate', 'mainEntityOfPage', '@id',
+  'sameAs', 'item', 'target', 'urlTemplate', 'mainEntityOfPage',
 ]);
 
 /**
@@ -665,19 +688,20 @@ function collectUrlFields(data) {
    * @param {string} path
    * @param {string} property
    */
-  function visit(value, path, property) {
+  function visit(value, path, property, depth = 0) {
+    if (depth > 50) return;
     if (typeof value === 'string') {
       if (URL_PROPS.has(property)) found.push({ path, value });
       return;
     }
     if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, `${path}[${i}]`, property));
+      value.forEach((item, i) => visit(item, `${path}[${i}]`, property, depth + 1));
       return;
     }
     if (typeof value !== 'object' || value === null) return;
     for (const [key, child] of Object.entries(/** @type {Record<string, unknown>} */ (value))) {
       const childPath = path ? `${path}.${key}` : key;
-      visit(child, childPath, key);
+      visit(child, childPath, key, depth + 1);
     }
   }
 }
@@ -689,8 +713,13 @@ const DATE_PROPS = new Set([
 
 const CURRENCY_PROPS = new Set(['priceCurrency', 'currency']);
 
-const ISO8601_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+const ISO8601_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/;
 const ISO4217_RE = /^[A-Z]{3}$/;
+const ISO4217_CODES = new Set(
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('currency')
+    : ['AUD', 'BRL', 'CAD', 'CHF', 'CNY', 'EUR', 'GBP', 'INR', 'JPY', 'KRW', 'MXN', 'SEK', 'USD'],
+);
 
 /**
  * Check if a date string satisfies ISO 8601 calendar date bounds.
@@ -707,6 +736,9 @@ function isIso8601Date(value) {
   const minute = Number(match[5] ?? 0);
   const second = Number(match[6] ?? 0);
   if (hour > 23 || minute > 59 || second > 59) return false;
+  const timezoneHour = Number(match[8] ?? 0);
+  const timezoneMinute = Number(match[9] ?? 0);
+  if (timezoneHour > 14 || timezoneMinute > 59 || (timezoneHour === 14 && timezoneMinute !== 0)) return false;
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
@@ -717,7 +749,8 @@ function isIso8601Date(value) {
  * @returns {boolean}
  */
 function isIso4217Currency(value) {
-  return ISO4217_RE.test(value.trim());
+  const code = value.trim();
+  return ISO4217_RE.test(code) && ISO4217_CODES.has(code);
 }
 
 /**
@@ -735,9 +768,10 @@ function collectValueChecks(data) {
    * @param {unknown} value
    * @param {string} path
    */
-  function visit(value, path) {
+  function visit(value, path, depth = 0) {
+    if (depth > 50) return;
     if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, `${path}[${i}]`));
+      value.forEach((item, i) => visit(item, `${path}[${i}]`, depth + 1));
       return;
     }
     if (typeof value !== 'object' || value === null) return;
@@ -756,7 +790,7 @@ function collectValueChecks(data) {
       ) {
         found.push({ kind: 'rating', path: childPath, value: child });
       }
-      visit(child, childPath);
+      visit(child, childPath, depth + 1);
     }
   }
 }
@@ -838,12 +872,13 @@ function extractTypes(typeField) {
  * @param {string[]} entityIds
  * @param {unknown} [inheritedContext]
  */
-function flattenJsonValue(format, sourceIndex, basePath, value, entities, entityIds, inheritedContext) {
+function flattenJsonValue(format, sourceIndex, basePath, value, entities, entityIds, inheritedContext, depth = 0) {
+  if (depth > 50) return;
   if (value === null || value === undefined) return;
 
   if (Array.isArray(value)) {
     value.forEach((item, i) => {
-      flattenJsonValue(format, sourceIndex, `${basePath}[${i}]`, item, entities, entityIds, inheritedContext);
+      flattenJsonValue(format, sourceIndex, `${basePath}[${i}]`, item, entities, entityIds, inheritedContext, depth + 1);
     });
     return;
   }
@@ -855,7 +890,7 @@ function flattenJsonValue(format, sourceIndex, basePath, value, entities, entity
   const graph = obj['@graph'];
 
   if (graph !== undefined) {
-    flattenJsonValue(format, sourceIndex, `${basePath}/@graph`, graph, entities, entityIds, context);
+    flattenJsonValue(format, sourceIndex, `${basePath}/@graph`, graph, entities, entityIds, context, depth + 1);
     const restKeys = Object.keys(obj).filter((k) => k !== '@graph');
     const hasEntityData = restKeys.some((k) => k !== '@context' && k !== '@id');
     if (hasEntityData) {
@@ -882,6 +917,7 @@ function flattenJsonValue(format, sourceIndex, basePath, value, entities, entity
  * @param {string[]} entityIds
  */
 function addEntity(format, sourceIndex, path, data, entities, entityIds) {
+  if (entities.length >= 1000) return;
   const types = extractTypes(data['@type']);
   const idField = data['@id'];
   const preferredId = typeof idField === 'string' && idField
@@ -920,8 +956,42 @@ function uniqueEntityId(preferredId, entities) {
  * @param {Entity[]} entities
  * @param {string[]} entityIds
  */
+function normalizeMarkupValue(value, depth = 0) {
+  if (depth > 50 || value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map((item) => normalizeMarkupValue(item, depth + 1));
+  if (typeof value !== 'object') return value;
+
+  const obj = /** @type {Record<string, unknown>} */ (value);
+  if (
+    (obj.format === 'microdata' || obj.format === 'rdfa') &&
+    'type' in obj &&
+    obj.properties &&
+    typeof obj.properties === 'object'
+  ) {
+    const typeField = obj.type;
+    const types = Array.isArray(typeField)
+      ? typeField.map((type) => stripSchemaPrefix(String(type))).filter(Boolean)
+      : typeof typeField === 'string'
+        ? typeField.split(/\s+/).map((type) => stripSchemaPrefix(type)).filter(Boolean)
+        : [];
+    const data = {};
+    for (const [property, child] of Object.entries(/** @type {Record<string, unknown>} */ (obj.properties))) {
+      data[stripSchemaPrefix(property)] = normalizeMarkupValue(child, depth + 1);
+    }
+    if (types.length) data['@type'] = types.length === 1 ? types[0] : types;
+    return data;
+  }
+
+  const normalized = {};
+  for (const [key, child] of Object.entries(obj)) {
+    normalized[key] = normalizeMarkupValue(child, depth + 1);
+  }
+  return normalized;
+}
+
 function normalizeMarkupNode(node, sourceIndex, entities, entityIds) {
-  const typeField = node.type;
+  const normalizedNode = /** @type {Record<string, unknown>} */ (normalizeMarkupValue(node));
+  const typeField = normalizedNode['@type'];
   let types;
   if (Array.isArray(typeField)) {
     types = typeField.map((t) => stripSchemaPrefix(String(t)));
@@ -931,19 +1001,7 @@ function normalizeMarkupNode(node, sourceIndex, entities, entityIds) {
     types = [];
   }
 
-  /** @type {Record<string, unknown>} */
-  const data = {};
-  for (const [property, value] of Object.entries(node.properties)) {
-    const normalizedProperty = stripSchemaPrefix(property);
-    if (data[normalizedProperty] === undefined) {
-      data[normalizedProperty] = value;
-    } else if (Array.isArray(data[normalizedProperty])) {
-      /** @type {unknown[]} */ (data[normalizedProperty]).push(value);
-    } else {
-      data[normalizedProperty] = [data[normalizedProperty], value];
-    }
-  }
-  if (types.length) data['@type'] = types.length === 1 ? types[0] : types;
+  const data = normalizedNode;
 
   const idField = data['@id'];
   const preferredId = typeof idField === 'string' && idField
@@ -1040,6 +1098,20 @@ function readName(val) {
     if (typeof obj.name === 'string') return obj.name;
   }
   return null;
+}
+
+const LOCAL_BUSINESS_TYPES = new Set([
+  'LocalBusiness', 'AnimalShelter', 'AutomotiveBusiness', 'ChildCare', 'Dentist',
+  'DryCleaningOrLaundry', 'EmergencyService', 'EmploymentAgency', 'EntertainmentBusiness',
+  'FinancialService', 'FoodEstablishment', 'GovernmentOffice', 'HealthAndBeautyBusiness',
+  'HomeAndConstructionBusiness', 'InternetCafe', 'LegalService', 'Library', 'LodgingBusiness',
+  'MedicalBusiness', 'ProfessionalService', 'RadioStation', 'RealEstateAgent', 'RecyclingCenter',
+  'SelfStorage', 'ShoppingCenter', 'SportsActivityLocation', 'Store', 'TelevisionStation',
+  'TouristInformationCenter', 'TravelAgency', 'Restaurant',
+]);
+
+function isLocalBusiness(types) {
+  return types.some((type) => LOCAL_BUSINESS_TYPES.has(type));
 }
 
 /**
@@ -1177,7 +1249,7 @@ function validateBreadcrumbStructure(data) {
         path: `itemListElement[${i}].position`,
       });
     }
-    if (!hasProperty(li, 'item')) {
+    if (i < items.length - 1 && !hasProperty(li, 'item')) {
       findings.push({
         severity: 'warning',
         code: 'BREADCRUMB_MISSING_ITEM',
@@ -1319,6 +1391,21 @@ function validateProfilePage(data) {
     }];
   }
   const entity = /** @type {Record<string, unknown>} */ (main);
+  const types = entity['@type'];
+  const typeList = Array.isArray(types) ? types : types ? [types] : [];
+  const isProfileSubject = typeList.some((type) => {
+    const value = String(type);
+    return value === 'Person' || value === 'Organization' || /(?:schema\.org\/|schema:)(Person|Organization)$/.test(value);
+  });
+  if (!isProfileSubject) {
+    return [{
+      severity: 'error',
+      code: 'PROFILE_INVALID_MAIN_ENTITY',
+      message: 'ProfilePage mainEntity must be a Person or Organization object.',
+      path: 'mainEntity.@type',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/profile-page',
+    }];
+  }
   if (hasProperty(entity, 'name') || hasProperty(entity, 'alternateName')) return [];
   return [{
     severity: 'error',
@@ -1327,6 +1414,72 @@ function validateProfilePage(data) {
     path: 'mainEntity.name',
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/profile-page',
   }];
+}
+
+/**
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateSoftwareApplication(data) {
+  /** @type {Finding[]} */
+  const findings = [];
+  const offers = Array.isArray(data.offers) ? data.offers : [data.offers];
+  const hasOfferPrice = offers.some((offer) => {
+    return typeof offer === 'object' && offer !== null && hasProperty(/** @type {Record<string, unknown>} */ (offer), 'price');
+  });
+  if (!hasOfferPrice) {
+    findings.push({
+      severity: 'error',
+      code: 'SOFTWARE_MISSING_OFFER_PRICE',
+      message: 'SoftwareApplication requires offers.price for Google rich-result eligibility.',
+      path: 'offers.price',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
+    });
+  }
+  if (!hasProperty(data, 'aggregateRating') && !hasProperty(data, 'review')) {
+    findings.push({
+      severity: 'error',
+      code: 'SOFTWARE_MISSING_RATING_OR_REVIEW',
+      message: 'SoftwareApplication requires aggregateRating or review for Google rich-result eligibility.',
+      path: 'aggregateRating',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
+    });
+  }
+  return findings;
+}
+
+/**
+ * Validate return-policy objects embedded in Organization or Product markup.
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateNestedMerchantReturnPolicies(data) {
+  /** @type {Finding[]} */
+  const findings = [];
+
+  function visit(value, path, depth) {
+    if (depth > 50 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}[${index}]`, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    const obj = /** @type {Record<string, unknown>} */ (value);
+    const types = obj['@type'];
+    const typeList = Array.isArray(types) ? types : types ? [types] : [];
+    if (typeList.some((type) => String(type).endsWith('MerchantReturnPolicy'))) {
+      findings.push(...validateMerchantReturnPolicy(obj).map((finding) => ({
+        ...finding,
+        path: path ? `${path}.${finding.path}` : finding.path,
+      })));
+    }
+    for (const [key, child] of Object.entries(obj)) {
+      visit(child, path ? `${path}.${key}` : key, depth + 1);
+    }
+  }
+
+  for (const [key, value] of Object.entries(data)) visit(value, key, 0);
+  return findings;
 }
 
 /**
@@ -1469,7 +1622,9 @@ function validateEntity(entity) {
     }
   }
 
-  for (const rule of RICH_RESULT_RULES.filter((candidate) => types.includes(candidate.type))) {
+  for (const rule of RICH_RESULT_RULES.filter((candidate) => {
+    return types.includes(candidate.type) || (candidate.type === 'LocalBusiness' && isLocalBusiness(types));
+  })) {
     for (const req of rule.required) {
       if (!hasProperty(data, req)) {
         pushFinding(findings, {
@@ -1562,6 +1717,12 @@ function validateEntity(entity) {
   if (types.includes('MerchantReturnPolicy')) {
     findings.push(...validateMerchantReturnPolicy(data).map((f) => ({ ...f, entityId: id })));
   }
+
+  if (types.includes('SoftwareApplication')) {
+    findings.push(...validateSoftwareApplication(data).map((f) => ({ ...f, entityId: id })));
+  }
+
+  findings.push(...validateNestedMerchantReturnPolicies(data).map((f) => ({ ...f, entityId: id })));
 
   if (hasPackedAuthorName(data)) {
     pushFinding(findings, {
@@ -1733,6 +1894,17 @@ function validate(snapshot, entities) {
 /** @typedef {import('./types.js').ScoreResult} ScoreResult */
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
+const SCORE_LOCAL_BUSINESS_TYPES = new Set([
+  'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'AutomotiveBusiness',
+  'FinancialService', 'LodgingBusiness', 'MedicalBusiness', 'ProfessionalService',
+]);
+
+function matchingRules(entity) {
+  return RICH_RESULT_RULES.filter((rule) => {
+    return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => SCORE_LOCAL_BUSINESS_TYPES.has(type)));
+  });
+}
+
 /**
  * @param {number} total
  * @returns {ScoreLabel}
@@ -1749,13 +1921,10 @@ function labelFromTotal(total) {
  * @returns {number}
  */
 function coverageBonus(entities) {
-  if (entities.length === 0) return 0;
-  const formats = new Set(entities.map((e) => e.format));
-  let bonus = Math.min(entities.length * 2, 10);
-  bonus += formats.size * 3;
-  const typed = entities.filter((e) => e.types.length > 0).length;
-  bonus += Math.min(typed * 1, 5);
-  return Math.min(bonus, 15);
+  const qualifying = entities.filter((entity) => matchingRules(entity).length > 0);
+  if (qualifying.length === 0) return 0;
+  const formats = new Set(qualifying.map((entity) => entity.format));
+  return Math.min(qualifying.length * 5 + formats.size * 5, 15);
 }
 
 /**
@@ -1765,8 +1934,12 @@ function coverageBonus(entities) {
 function richnessBonus(entities) {
   let bonus = 0;
   for (const entity of entities) {
-    const propCount = Object.keys(entity.data).filter((k) => !k.startsWith('@')).length;
-    bonus += Math.min(propCount, 5);
+    const meaningful = new Set(
+      matchingRules(entity).flatMap((rule) => [...rule.required, ...rule.recommended]),
+    );
+    for (const property of meaningful) {
+      if (property in entity.data) bonus += 1;
+    }
   }
   return Math.min(bonus, 15);
 }
@@ -1791,15 +1964,12 @@ function score(findings, entities) {
     };
   }
 
+  const qualifying = entities.some((entity) => matchingRules(entity).length > 0);
   const coverage = coverageBonus(entities);
   const richness = richnessBonus(entities);
-  let total = 70;
-  total += coverage;
-  total += richness;
-  total -= errorCount * 12;
-  total -= warningCount * 4;
-
-  const validity = Math.max(0, Math.min(40, 40 - errorCount * 8 - warningCount * 2));
+  const baseValidity = qualifying ? 70 : 40;
+  const validity = Math.max(0, baseValidity - errorCount * 12 - warningCount * 4);
+  let total = validity + coverage + richness;
 
   total = Math.round(Math.max(0, Math.min(100, total)));
 

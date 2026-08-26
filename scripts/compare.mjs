@@ -16,6 +16,7 @@ async function querySMV(html) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
     });
+    if (!res.ok) return { error: `Schema Markup Validator request failed (HTTP ${res.status} ${res.statusText}).` };
     const text = await res.text();
     const jsonStr = text.replace(/^\)\]\}\x27\n?/, '');
     return JSON.parse(jsonStr);
@@ -85,6 +86,12 @@ async function compareSnapshot(name, url, canonical, entitiesList) {
 
   // 2. Official Schema.org Validator
   const smvData = await querySMV(html);
+  if (smvData.error) {
+    console.log(`\n⚠️  validator.schema: unavailable — ${smvData.error}`);
+    console.log('🎯 Result: comparison not performed');
+    process.exitCode = 1;
+    return false;
+  }
   const smvNodes = smvData.tripleGroups?.[0]?.nodes || [];
   const smvErrors = smvNodes.reduce((acc, n) => acc + (n.errors?.length || 0), 0);
 
@@ -106,6 +113,7 @@ async function compareSnapshot(name, url, canonical, entitiesList) {
 
   const isConsistent = quality.errorCount === smvErrors;
   console.log(`\n🎯 Result: ${isConsistent ? '✅ Highly Consistent' : '⚠️ Divergence Detected'}`);
+  return true;
 }
 
 async function run() {
@@ -122,10 +130,14 @@ async function run() {
     await compareSnapshot(target, target, target, rawBlocks);
   } else {
     for (const [key, fixture] of Object.entries(FIXTURES)) {
-      await compareSnapshot(fixture.name, fixture.url, fixture.canonical, fixture.entities);
+      const compared = await compareSnapshot(fixture.name, fixture.url, fixture.canonical, fixture.entities);
+      if (!compared) break;
     }
   }
   console.log('\n============================================================\n');
 }
 
-run();
+run().catch((err) => {
+  console.error('Comparison failed:', err instanceof Error ? err.message : String(err));
+  process.exitCode = 1;
+});

@@ -54,12 +54,13 @@ function extractTypes(typeField) {
  * @param {string[]} entityIds
  * @param {unknown} [inheritedContext]
  */
-function flattenJsonValue(format, sourceIndex, basePath, value, entities, entityIds, inheritedContext) {
+function flattenJsonValue(format, sourceIndex, basePath, value, entities, entityIds, inheritedContext, depth = 0) {
+  if (depth > 50) return;
   if (value === null || value === undefined) return;
 
   if (Array.isArray(value)) {
     value.forEach((item, i) => {
-      flattenJsonValue(format, sourceIndex, `${basePath}[${i}]`, item, entities, entityIds, inheritedContext);
+      flattenJsonValue(format, sourceIndex, `${basePath}[${i}]`, item, entities, entityIds, inheritedContext, depth + 1);
     });
     return;
   }
@@ -71,7 +72,7 @@ function flattenJsonValue(format, sourceIndex, basePath, value, entities, entity
   const graph = obj['@graph'];
 
   if (graph !== undefined) {
-    flattenJsonValue(format, sourceIndex, `${basePath}/@graph`, graph, entities, entityIds, context);
+    flattenJsonValue(format, sourceIndex, `${basePath}/@graph`, graph, entities, entityIds, context, depth + 1);
     const restKeys = Object.keys(obj).filter((k) => k !== '@graph');
     const hasEntityData = restKeys.some((k) => k !== '@context' && k !== '@id');
     if (hasEntityData) {
@@ -98,6 +99,7 @@ function flattenJsonValue(format, sourceIndex, basePath, value, entities, entity
  * @param {string[]} entityIds
  */
 function addEntity(format, sourceIndex, path, data, entities, entityIds) {
+  if (entities.length >= 1000) return;
   const types = extractTypes(data['@type']);
   const idField = data['@id'];
   const preferredId = typeof idField === 'string' && idField
@@ -136,8 +138,42 @@ function uniqueEntityId(preferredId, entities) {
  * @param {Entity[]} entities
  * @param {string[]} entityIds
  */
+function normalizeMarkupValue(value, depth = 0) {
+  if (depth > 50 || value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map((item) => normalizeMarkupValue(item, depth + 1));
+  if (typeof value !== 'object') return value;
+
+  const obj = /** @type {Record<string, unknown>} */ (value);
+  if (
+    (obj.format === 'microdata' || obj.format === 'rdfa') &&
+    'type' in obj &&
+    obj.properties &&
+    typeof obj.properties === 'object'
+  ) {
+    const typeField = obj.type;
+    const types = Array.isArray(typeField)
+      ? typeField.map((type) => stripSchemaPrefix(String(type))).filter(Boolean)
+      : typeof typeField === 'string'
+        ? typeField.split(/\s+/).map((type) => stripSchemaPrefix(type)).filter(Boolean)
+        : [];
+    const data = {};
+    for (const [property, child] of Object.entries(/** @type {Record<string, unknown>} */ (obj.properties))) {
+      data[stripSchemaPrefix(property)] = normalizeMarkupValue(child, depth + 1);
+    }
+    if (types.length) data['@type'] = types.length === 1 ? types[0] : types;
+    return data;
+  }
+
+  const normalized = {};
+  for (const [key, child] of Object.entries(obj)) {
+    normalized[key] = normalizeMarkupValue(child, depth + 1);
+  }
+  return normalized;
+}
+
 function normalizeMarkupNode(node, sourceIndex, entities, entityIds) {
-  const typeField = node.type;
+  const normalizedNode = /** @type {Record<string, unknown>} */ (normalizeMarkupValue(node));
+  const typeField = normalizedNode['@type'];
   let types;
   if (Array.isArray(typeField)) {
     types = typeField.map((t) => stripSchemaPrefix(String(t)));
@@ -147,19 +183,7 @@ function normalizeMarkupNode(node, sourceIndex, entities, entityIds) {
     types = [];
   }
 
-  /** @type {Record<string, unknown>} */
-  const data = {};
-  for (const [property, value] of Object.entries(node.properties)) {
-    const normalizedProperty = stripSchemaPrefix(property);
-    if (data[normalizedProperty] === undefined) {
-      data[normalizedProperty] = value;
-    } else if (Array.isArray(data[normalizedProperty])) {
-      /** @type {unknown[]} */ (data[normalizedProperty]).push(value);
-    } else {
-      data[normalizedProperty] = [data[normalizedProperty], value];
-    }
-  }
-  if (types.length) data['@type'] = types.length === 1 ? types[0] : types;
+  const data = normalizedNode;
 
   const idField = data['@id'];
   const preferredId = typeof idField === 'string' && idField

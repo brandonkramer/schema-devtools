@@ -11,7 +11,7 @@ import { RICH_RESULT_RULES } from '../src/catalog/rich-results.js';
 import { DEPRECATED_TYPES, FAQ_GOOGLE_STATUS } from '../src/catalog/deprecations.js';
 import { matchRuleInCatalog, hasProperty, isIso8601Date, isIso4217Currency } from '../src/catalog/syntax.js';
 import { formatEvalException, listen } from '../devtools/host.js';
-import { matchesSearch, store, visibleEntities } from '../ui/store.js';
+import { matchesSearch, serpCards, store, visibleEntities } from '../ui/store.js';
 import { FIXTURES } from '../sandbox/fixtures.js';
 
 const root = new URL('../', import.meta.url);
@@ -177,6 +177,69 @@ const invalidDate = runInspect({
   datePublished: '2026-02-30',
 });
 assert(hasCode(invalidDate, 'INVALID_DATE'));
+assert.equal(isIso8601Date('2026-01-01T12:00:00+99:99'), false);
+assert.equal(isIso4217Currency('ZZZ'), false);
+
+// Current Google feature requirements and nested markup normalization
+const course = runInspect({ '@context': 'https://schema.org', '@type': 'Course', name: 'Course', description: 'Description' });
+assert(!hasCode(course, 'MISSING_PROVIDER'));
+const incompleteCourse = runInspect({ '@context': 'https://schema.org', '@type': 'Course', name: 'Course' });
+assert(hasCode(incompleteCourse, 'MISSING_DESCRIPTION'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Recipe', name: 'Soup' }), 'MISSING_IMAGE'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Dataset', name: 'Data' }), 'MISSING_DESCRIPTION'));
+const software = runInspect({ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'App' });
+assert(hasCode(software, 'SOFTWARE_MISSING_OFFER_PRICE'));
+assert(hasCode(software, 'SOFTWARE_MISSING_RATING_OR_REVIEW'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Restaurant', name: 'Cafe' }), 'MISSING_ADDRESS'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org',
+  '@type': 'ProfilePage',
+  mainEntity: { '@type': 'Product', name: 'Not a profile' },
+}), 'PROFILE_INVALID_MAIN_ENTITY'));
+const breadcrumb = runInspect({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://example.test/' },
+    { '@type': 'ListItem', position: 2, name: 'Current' },
+  ],
+});
+assert(!hasCode(breadcrumb, 'BREADCRUMB_MISSING_ITEM'));
+
+const nestedMicrodata = {
+  url: 'https://example.test/page', title: 'Example', canonical: null, robots: null, inspectedAt: '',
+  jsonld: [],
+  microdata: [{
+    format: 'microdata', type: 'https://schema.org/BreadcrumbList', selector: 'ol', properties: {
+      itemListElement: [
+        { format: 'microdata', type: 'https://schema.org/ListItem', selector: 'li:nth-of-type(1)', properties: { name: 'Home', position: '1', item: 'https://example.test/' } },
+        { format: 'microdata', type: 'https://schema.org/ListItem', selector: 'li:nth-of-type(2)', properties: { name: 'Current', position: '2' } },
+      ],
+    },
+  }],
+  rdfa: [], agent: { hasModelContext: false, modelContext: null, hasLlmsTxtLink: false },
+};
+const normalizedMicrodata = normalize(nestedMicrodata);
+assert.equal(normalizedMicrodata.entities[0].data.itemListElement[0]['@type'], 'ListItem');
+assert(!validate(nestedMicrodata, normalizedMicrodata.entities).some((finding) => finding.code.startsWith('BREADCRUMB_MISSING')));
+
+const policy = runInspect({
+  '@context': 'https://schema.org', '@type': 'Organization', name: 'Store',
+  hasMerchantReturnPolicy: { '@type': 'MerchantReturnPolicy', returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow' },
+});
+assert(hasCode(policy, 'RETURN_POLICY_MISSING_COUNTRY'));
+assert(hasCode(policy, 'RETURN_POLICY_MISSING_DAYS'));
+
+const fragmentIds = runInspect({
+  '@context': 'https://schema.org', '@type': 'ProfilePage',
+  mainEntity: { '@id': '#author', '@type': 'Person', name: 'Author' },
+});
+assert(!hasCode(fragmentIds, 'RELATIVE_URL'));
+
+const arbitraryThings = runInspect(Array.from({ length: 5 }, (_, i) => ({
+  '@context': 'https://schema.org', '@type': 'Thing', '@id': `https://example.test/#${i}`, a: 1, b: 2, c: 3,
+})));
+assert.equal(arbitraryThings.score.total, 40);
 
 // Agent Score Invariance
 const agentEntities = faq.entities;
@@ -207,6 +270,8 @@ assert(panelSource.includes('setThemeChangeHandler'));
 assert(!panelSource.includes('panels.onThemeChanged'));
 assert(!panelSource.includes('window.__SCHEMA_DEVTOOLS__ ='));
 assert(panelSource.includes('PAGE_WATCH_REMOVE'));
+assert(panelSource.includes('containsInteresting'));
+assert(panelSource.includes("Symbol.for('schema-devtools.watch')"));
 
 console.log('✅ Passed');
 
@@ -330,6 +395,7 @@ assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel templates must not assign in
 assert.doesNotMatch(toolbarJs, /\.innerHTML/, 'Toolbar must not assign innerHTML.');
 assert.doesNotMatch(entityListJs, /\.innerHTML/, 'Entity list must not assign innerHTML.');
 assert.doesNotMatch(panelJs, /\.innerHTML/, 'Panel analysis must not assign innerHTML.');
+assert.doesNotMatch(readFileSync(new URL('ui/views/serp.js', root), 'utf8'), /src:\s*card\.image/, 'SERP previews must not request inspected-page images.');
 assert.match(panelJs, /listen\(chrome\.devtools\?\.network\?\.onNavigated/, 'Navigation refresh must not assume network.onNavigated exists.');
 assert.match(panelJs, /formatEvalException/, 'Eval failures must format Chrome exceptionInfo.');
 
@@ -356,6 +422,8 @@ assert.equal(visibleEntities().map((entity) => entity.id).join(','), 'entity:2')
 assert.equal(matchesSearch('Article jsonld', 'article'), true);
 assert.equal(matchesSearch('Article jsonld', 'product'), false);
 store.query = '';
+store.entities = [{ id: 'restaurant:1', types: ['Restaurant'], format: 'jsonld', sourceIndex: 0, data: { name: 'Cafe' } }];
+assert.equal(serpCards().length, 1, 'LocalBusiness subtypes must have reachable SERP previews.');
 
 assert.equal(
   formatEvalException({ description: 'Operation failed: %s', details: ['Inspected tab was closed'] }),

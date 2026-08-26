@@ -40,6 +40,20 @@ function readName(val) {
   return null;
 }
 
+const LOCAL_BUSINESS_TYPES = new Set([
+  'LocalBusiness', 'AnimalShelter', 'AutomotiveBusiness', 'ChildCare', 'Dentist',
+  'DryCleaningOrLaundry', 'EmergencyService', 'EmploymentAgency', 'EntertainmentBusiness',
+  'FinancialService', 'FoodEstablishment', 'GovernmentOffice', 'HealthAndBeautyBusiness',
+  'HomeAndConstructionBusiness', 'InternetCafe', 'LegalService', 'Library', 'LodgingBusiness',
+  'MedicalBusiness', 'ProfessionalService', 'RadioStation', 'RealEstateAgent', 'RecyclingCenter',
+  'SelfStorage', 'ShoppingCenter', 'SportsActivityLocation', 'Store', 'TelevisionStation',
+  'TouristInformationCenter', 'TravelAgency', 'Restaurant',
+]);
+
+function isLocalBusiness(types) {
+  return types.some((type) => LOCAL_BUSINESS_TYPES.has(type));
+}
+
 /**
  * Check if author name appears packed with commas (multiple authors in one string).
  * @param {Record<string, unknown>} data
@@ -175,7 +189,7 @@ function validateBreadcrumbStructure(data) {
         path: `itemListElement[${i}].position`,
       });
     }
-    if (!hasProperty(li, 'item')) {
+    if (i < items.length - 1 && !hasProperty(li, 'item')) {
       findings.push({
         severity: 'warning',
         code: 'BREADCRUMB_MISSING_ITEM',
@@ -317,6 +331,21 @@ function validateProfilePage(data) {
     }];
   }
   const entity = /** @type {Record<string, unknown>} */ (main);
+  const types = entity['@type'];
+  const typeList = Array.isArray(types) ? types : types ? [types] : [];
+  const isProfileSubject = typeList.some((type) => {
+    const value = String(type);
+    return value === 'Person' || value === 'Organization' || /(?:schema\.org\/|schema:)(Person|Organization)$/.test(value);
+  });
+  if (!isProfileSubject) {
+    return [{
+      severity: 'error',
+      code: 'PROFILE_INVALID_MAIN_ENTITY',
+      message: 'ProfilePage mainEntity must be a Person or Organization object.',
+      path: 'mainEntity.@type',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/profile-page',
+    }];
+  }
   if (hasProperty(entity, 'name') || hasProperty(entity, 'alternateName')) return [];
   return [{
     severity: 'error',
@@ -325,6 +354,72 @@ function validateProfilePage(data) {
     path: 'mainEntity.name',
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/profile-page',
   }];
+}
+
+/**
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateSoftwareApplication(data) {
+  /** @type {Finding[]} */
+  const findings = [];
+  const offers = Array.isArray(data.offers) ? data.offers : [data.offers];
+  const hasOfferPrice = offers.some((offer) => {
+    return typeof offer === 'object' && offer !== null && hasProperty(/** @type {Record<string, unknown>} */ (offer), 'price');
+  });
+  if (!hasOfferPrice) {
+    findings.push({
+      severity: 'error',
+      code: 'SOFTWARE_MISSING_OFFER_PRICE',
+      message: 'SoftwareApplication requires offers.price for Google rich-result eligibility.',
+      path: 'offers.price',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
+    });
+  }
+  if (!hasProperty(data, 'aggregateRating') && !hasProperty(data, 'review')) {
+    findings.push({
+      severity: 'error',
+      code: 'SOFTWARE_MISSING_RATING_OR_REVIEW',
+      message: 'SoftwareApplication requires aggregateRating or review for Google rich-result eligibility.',
+      path: 'aggregateRating',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
+    });
+  }
+  return findings;
+}
+
+/**
+ * Validate return-policy objects embedded in Organization or Product markup.
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateNestedMerchantReturnPolicies(data) {
+  /** @type {Finding[]} */
+  const findings = [];
+
+  function visit(value, path, depth) {
+    if (depth > 50 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}[${index}]`, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    const obj = /** @type {Record<string, unknown>} */ (value);
+    const types = obj['@type'];
+    const typeList = Array.isArray(types) ? types : types ? [types] : [];
+    if (typeList.some((type) => String(type).endsWith('MerchantReturnPolicy'))) {
+      findings.push(...validateMerchantReturnPolicy(obj).map((finding) => ({
+        ...finding,
+        path: path ? `${path}.${finding.path}` : finding.path,
+      })));
+    }
+    for (const [key, child] of Object.entries(obj)) {
+      visit(child, path ? `${path}.${key}` : key, depth + 1);
+    }
+  }
+
+  for (const [key, value] of Object.entries(data)) visit(value, key, 0);
+  return findings;
 }
 
 /**
@@ -467,7 +562,9 @@ function validateEntity(entity) {
     }
   }
 
-  for (const rule of RICH_RESULT_RULES.filter((candidate) => types.includes(candidate.type))) {
+  for (const rule of RICH_RESULT_RULES.filter((candidate) => {
+    return types.includes(candidate.type) || (candidate.type === 'LocalBusiness' && isLocalBusiness(types));
+  })) {
     for (const req of rule.required) {
       if (!hasProperty(data, req)) {
         pushFinding(findings, {
@@ -560,6 +657,12 @@ function validateEntity(entity) {
   if (types.includes('MerchantReturnPolicy')) {
     findings.push(...validateMerchantReturnPolicy(data).map((f) => ({ ...f, entityId: id })));
   }
+
+  if (types.includes('SoftwareApplication')) {
+    findings.push(...validateSoftwareApplication(data).map((f) => ({ ...f, entityId: id })));
+  }
+
+  findings.push(...validateNestedMerchantReturnPolicies(data).map((f) => ({ ...f, entityId: id })));
 
   if (hasPackedAuthorName(data)) {
     pushFinding(findings, {

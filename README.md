@@ -57,8 +57,8 @@ Switch between realistic mock fixtures (E-Commerce, Multi-Author Article, Restau
 
 ### Validate any File or URL from Terminal
 ```bash
-# Validate sandbox fixtures or any local schema file
-npm run validate ./sandbox/fixtures.js
+# Validate any local JSON-LD or HTML file
+npm run validate ./path/to/schema.json
 
 # Validate a live website directly
 npm run validate https://example.com/product
@@ -74,6 +74,28 @@ npm run compare
 ```bash
 # Runs bundle engine, schema unit tests, catalog audits, and security guardrails
 npm test
+```
+
+---
+
+## 🤖 AI Agents & MCP (Model Context Protocol)
+
+Schema DevTools is engineered for both human engineers and autonomous AI coding agents:
+
+### 1. One-Click AI Prompts & Agent Bundles
+Inside the DevTools panel, the **Export** menu provides instant grounding context for LLMs:
+- **Copy for AI Prompt** — Pre-formatted prompt with the complete semantic graph ready to paste into ChatGPT, Claude, or Gemini.
+- **Copy Agent Bundle (JSON)** — Clean, normalized JSON bundle of all entities, `@id` relations, validation findings, and quality scores.
+- **Copy Agent Markdown** — Structured Markdown outline for documentation and technical SEO audits.
+
+### 2. Live Tab Extraction via `chrome-devtools-mcp`
+When using Google's official [Chrome DevTools MCP server](https://github.com/ChromeDevTools/chrome-devtools-mcp), AI agents can evaluate our self-contained extraction engine ([`src/extract.js`](src/extract.js)) directly in any active browser tab via `execute_javascript` without needing browser extension APIs.
+
+### 3. Headless CLI Automation
+AI agents and CI/CD pipelines can run automated schema audits directly from the command line:
+```bash
+npm run validate ./path/to/schema.json
+npm run validate https://example.com/product
 ```
 
 ---

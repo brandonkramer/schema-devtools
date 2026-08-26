@@ -46,8 +46,8 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'Recipe',
-    required: ['name'],
-    recommended: ['image', 'author', 'datePublished', 'description', 'recipeIngredient', 'recipeInstructions'],
+    required: ['name', 'image'],
+    recommended: ['author', 'datePublished', 'description', 'recipeIngredient', 'recipeInstructions'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/recipe',
   },
   {
@@ -82,8 +82,8 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'Course',
-    required: ['name', 'provider'],
-    recommended: ['description', 'offers'],
+    required: ['name', 'description'],
+    recommended: ['provider'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/course',
   },
   {
@@ -124,8 +124,8 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'Dataset',
-    required: ['name'],
-    recommended: ['description', 'license', 'creator', 'distribution'],
+    required: ['name', 'description'],
+    recommended: ['license', 'creator', 'distribution'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/dataset',
   },
   {

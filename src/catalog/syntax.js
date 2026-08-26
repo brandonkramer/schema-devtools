@@ -28,12 +28,13 @@ export function hasProperty(data, prop) {
   return hasValue(data[prop]);
 
   /** @param {unknown} val */
-  function hasValue(val) {
+  function hasValue(val, depth = 0) {
+    if (depth > 50) return false;
     if (val === undefined || val === null) return false;
     if (typeof val === 'string' && val.trim() === '') return false;
-    if (Array.isArray(val)) return val.some(hasValue);
+    if (Array.isArray(val)) return val.some((item) => hasValue(item, depth + 1));
     if (typeof val === 'object') {
-      return Object.values(/** @type {Record<string, unknown>} */ (val)).some(hasValue);
+      return Object.values(/** @type {Record<string, unknown>} */ (val)).some((item) => hasValue(item, depth + 1));
     }
     return true;
   }
@@ -56,7 +57,7 @@ export function isRelativeUrl(val) {
 
 const URL_PROPS = new Set([
   'url', 'image', 'logo', 'contentUrl', 'thumbnailUrl', 'embedUrl',
-  'sameAs', 'item', 'target', 'urlTemplate', 'mainEntityOfPage', '@id',
+  'sameAs', 'item', 'target', 'urlTemplate', 'mainEntityOfPage',
 ]);
 
 /**
@@ -76,19 +77,20 @@ export function collectUrlFields(data) {
    * @param {string} path
    * @param {string} property
    */
-  function visit(value, path, property) {
+  function visit(value, path, property, depth = 0) {
+    if (depth > 50) return;
     if (typeof value === 'string') {
       if (URL_PROPS.has(property)) found.push({ path, value });
       return;
     }
     if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, `${path}[${i}]`, property));
+      value.forEach((item, i) => visit(item, `${path}[${i}]`, property, depth + 1));
       return;
     }
     if (typeof value !== 'object' || value === null) return;
     for (const [key, child] of Object.entries(/** @type {Record<string, unknown>} */ (value))) {
       const childPath = path ? `${path}.${key}` : key;
-      visit(child, childPath, key);
+      visit(child, childPath, key, depth + 1);
     }
   }
 }
@@ -100,8 +102,13 @@ const DATE_PROPS = new Set([
 
 const CURRENCY_PROPS = new Set(['priceCurrency', 'currency']);
 
-const ISO8601_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+const ISO8601_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/;
 const ISO4217_RE = /^[A-Z]{3}$/;
+const ISO4217_CODES = new Set(
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('currency')
+    : ['AUD', 'BRL', 'CAD', 'CHF', 'CNY', 'EUR', 'GBP', 'INR', 'JPY', 'KRW', 'MXN', 'SEK', 'USD'],
+);
 
 /**
  * Check if a date string satisfies ISO 8601 calendar date bounds.
@@ -118,6 +125,9 @@ export function isIso8601Date(value) {
   const minute = Number(match[5] ?? 0);
   const second = Number(match[6] ?? 0);
   if (hour > 23 || minute > 59 || second > 59) return false;
+  const timezoneHour = Number(match[8] ?? 0);
+  const timezoneMinute = Number(match[9] ?? 0);
+  if (timezoneHour > 14 || timezoneMinute > 59 || (timezoneHour === 14 && timezoneMinute !== 0)) return false;
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
@@ -128,7 +138,8 @@ export function isIso8601Date(value) {
  * @returns {boolean}
  */
 export function isIso4217Currency(value) {
-  return ISO4217_RE.test(value.trim());
+  const code = value.trim();
+  return ISO4217_RE.test(code) && ISO4217_CODES.has(code);
 }
 
 /**
@@ -146,9 +157,10 @@ export function collectValueChecks(data) {
    * @param {unknown} value
    * @param {string} path
    */
-  function visit(value, path) {
+  function visit(value, path, depth = 0) {
+    if (depth > 50) return;
     if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, `${path}[${i}]`));
+      value.forEach((item, i) => visit(item, `${path}[${i}]`, depth + 1));
       return;
     }
     if (typeof value !== 'object' || value === null) return;
@@ -167,7 +179,7 @@ export function collectValueChecks(data) {
       ) {
         found.push({ kind: 'rating', path: childPath, value: child });
       }
-      visit(child, childPath);
+      visit(child, childPath, depth + 1);
     }
   }
 }

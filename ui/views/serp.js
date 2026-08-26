@@ -1,7 +1,7 @@
 import van from '../../vendor/van.js';
 import { actions, serpCards } from '../store.js';
 
-const { div, span, p, button, article, img } = van.tags;
+const { div, span, p, button, article } = van.tags;
 
 export function SerpView() {
   const cards = serpCards();
@@ -42,7 +42,6 @@ export function SerpView() {
         ),
         div(
           { class: 'serp-card-body' },
-          card.image ? img({ class: 'serp-thumb', alt: '', src: card.image, loading: 'lazy' }) : null,
           div(
             { class: 'serp-snippet-wrap' },
             card.meta ? div({ class: 'serp-meta' }, card.meta) : null,

@@ -76,9 +76,12 @@ export const actions = {
         const testEntity = { ...entity, data: parsed };
         const testFindings = engine.validate(dummySnapshot, [testEntity]);
         const testScore = engine.score(testFindings, [testEntity]);
+        const hasErrors = testScore.errorCount > 0;
         store.sandboxStatus = {
-          valid: true,
-          message: `Valid JSON-LD · Quality Score ${testScore.total}/100`,
+          valid: !hasErrors,
+          message: hasErrors
+            ? `${testScore.errorCount} validation error${testScore.errorCount === 1 ? '' : 's'} · Quality Score ${testScore.total}/100`
+            : `Valid JSON-LD · Quality Score ${testScore.total}/100`,
           score: testScore.total,
           errorCount: testScore.errorCount,
           warningCount: testScore.warningCount,
@@ -262,9 +265,12 @@ export function serpCards() {
   const cards = [];
   const seen = new Set();
   for (const entity of store.entities) {
-    const key = entity.types.find((type) =>
-      ['Product', 'Recipe', 'NewsArticle', 'Article', 'BlogPosting', 'BreadcrumbList', 'Event', 'JobPosting', 'ProfilePage'].includes(type),
-    );
+    const key = entity.types.find((type) => [
+      'Product', 'Recipe', 'NewsArticle', 'Article', 'BlogPosting', 'BreadcrumbList', 'Event',
+      'JobPosting', 'ProfilePage', 'VideoObject', 'MediaObject', 'Review', 'CriticReview',
+      'UserReview', 'LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment',
+      'AutomotiveBusiness', 'FinancialService', 'LodgingBusiness',
+    ].includes(type));
     if (!key || seen.has(`${key}:${entity.id}`)) continue;
     const card = serpCardFor(entity);
     if (!card) continue;

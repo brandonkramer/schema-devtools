@@ -28,9 +28,10 @@ let lastWatchGeneration = 0;
 let watchTimer = 0;
 let analyzing = false;
 let panelVisible = true;
+const HIGHLIGHT_TOKEN = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
 
 const PAGE_WATCH_INSTALL = `(() => {
-  const KEY = '__SCHEMA_DEVTOOLS_WATCH__';
+  const KEY = Symbol.for('schema-devtools.watch');
   if (window[KEY] && window[KEY].installed) return window[KEY].generation;
   const state = { installed: true, generation: 1, timer: 0 };
   window[KEY] = state;
@@ -44,7 +45,7 @@ const PAGE_WATCH_INSTALL = `(() => {
   };
   const isOverlay = (node) => {
     if (!node || node.nodeType !== 1) return false;
-    return node.id === '__schema-dt-hl' || node.getAttribute('data-schema-devtools') === 'overlay';
+    return node.getAttribute('data-schema-devtools') === 'overlay';
   };
   const interesting = (node) => {
     if (!node || node.nodeType !== 1) return false;
@@ -55,7 +56,13 @@ const PAGE_WATCH_INSTALL = `(() => {
       return type === 'application/ld+json';
     }
     return el.hasAttribute('itemscope') || el.hasAttribute('itemtype') || el.hasAttribute('itemprop')
-      || el.hasAttribute('typeof') || el.hasAttribute('property') || el.hasAttribute('vocab');
+      || el.hasAttribute('itemref') || el.hasAttribute('typeof') || el.hasAttribute('property') || el.hasAttribute('vocab');
+  };
+  const containsInteresting = (node) => {
+    if (interesting(node)) return true;
+    return Boolean(node && node.nodeType === 1 && node.querySelector(
+      'script[type="application/ld+json"], [itemscope], [itemtype], [itemprop], [typeof], [property], [vocab]'
+    ));
   };
   const target = document.documentElement || document;
   if (target) {
@@ -64,12 +71,12 @@ const PAGE_WATCH_INSTALL = `(() => {
         if (isOverlay(m.target)) continue;
         if (m.type === 'characterData') {
           const host = m.target.parentElement;
-          if (host && host.tagName === 'SCRIPT') { bump(); return; }
+          if (host && (host.tagName === 'SCRIPT' || interesting(host))) { bump(); return; }
           continue;
         }
         if (interesting(m.target)) { bump(); return; }
-        for (const n of m.addedNodes) { if (interesting(n)) { bump(); return; } }
-        for (const n of m.removedNodes) { if (interesting(n)) { bump(); return; } }
+        for (const n of m.addedNodes) { if (containsInteresting(n)) { bump(); return; } }
+        for (const n of m.removedNodes) { if (containsInteresting(n)) { bump(); return; } }
       }
     });
     observer.observe(target, {
@@ -77,7 +84,10 @@ const PAGE_WATCH_INSTALL = `(() => {
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ['type', 'itemscope', 'itemtype', 'itemprop', 'typeof', 'property', 'vocab', 'itemref'],
+      attributeFilter: [
+        'type', 'itemscope', 'itemtype', 'itemprop', 'itemref', 'typeof', 'property', 'vocab',
+        'content', 'href', 'src', 'data', 'datetime', 'itemid', 'resource', 'about', 'prefix', 'rel',
+      ],
     });
     state.observer = observer;
   }
@@ -100,9 +110,8 @@ const PAGE_WATCH_INSTALL = `(() => {
   return state.generation;
 })()`;
 
-const PAGE_WATCH_POLL = `(() => (window.__SCHEMA_DEVTOOLS_WATCH__ && window.__SCHEMA_DEVTOOLS_WATCH__.generation) || 0)()`;
 const PAGE_WATCH_REMOVE = `(() => {
-  const KEY = '__SCHEMA_DEVTOOLS_WATCH__';
+  const KEY = Symbol.for('schema-devtools.watch');
   const state = window[KEY];
   if (!state) return false;
   try { state.observer && state.observer.disconnect(); } catch (e) {}
@@ -227,19 +236,24 @@ function selectorForEntity(snap, entity) {
 
 function highlightExpr(selector) {
   return `(function(){
-    var id='__schema-dt-hl';
-    var old=document.getElementById(id);
-    if(old) old.remove();
+    var token=${JSON.stringify(HIGHLIGHT_TOKEN)};
+    document.querySelectorAll('[data-schema-devtools-highlight]').forEach(function(old){
+      if(old.getAttribute('data-schema-devtools-highlight')===token) old.remove();
+    });
     var el=document.querySelector(${JSON.stringify(selector)});
     if(!el) return false;
     try { el.scrollIntoView({block:'nearest', inline:'nearest'}); } catch (e) {}
     var r=el.getBoundingClientRect();
     var box=document.createElement('div');
-    box.id=id;
     box.setAttribute('data-schema-devtools','overlay');
+    box.setAttribute('data-schema-devtools-highlight',token);
     box.style.cssText='position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #1a73e8;background:rgba(26,115,232,.15);box-sizing:border-box;top:'+r.top+'px;left:'+r.left+'px;width:'+Math.max(r.width,2)+'px;height:'+Math.max(r.height,2)+'px;';
     document.documentElement.appendChild(box);
-    setTimeout(function(){ var n=document.getElementById(id); if(n) n.remove(); }, 1600);
+    setTimeout(function(){
+      document.querySelectorAll('[data-schema-devtools-highlight]').forEach(function(n){
+        if(n.getAttribute('data-schema-devtools-highlight')===token) n.remove();
+      });
+    }, 1600);
     return true;
   })()`;
 }
@@ -330,6 +344,17 @@ async function analyze(options = {}) {
         ? `Live update · ${snapshot.url || 'page'}`
         : `Analyzed ${snapshot.url || 'page'} at ${snapshot.inspectedAt || 'now'}`,
     );
+  } catch (err) {
+    if (run === analysisRun) {
+      snapshot = null;
+      report = null;
+      findings = [];
+      scoreResult = null;
+      agentBundle = null;
+      syncStore();
+      setStatus(err instanceof Error ? err.message : 'Analysis failed', true);
+    }
+    throw err;
   } finally {
     if (run === analysisRun) analyzing = false;
   }
@@ -411,6 +436,10 @@ function bindActions() {
   };
   actions.copyJson = () => {
     const entity = selectedEntity();
+    if (store.sandboxOpen && store.sandboxEntityId === entity?.id) {
+      copyText(store.sandboxText);
+      return;
+    }
     if (entity) {
       copyText(JSON.stringify(entity.data, null, 2));
       return;
@@ -529,7 +558,7 @@ function bindActions() {
 }
 
 async function startPageWatch() {
-  if (watchTimer) return;
+  if (!panelVisible || watchTimer) return;
   try {
     const generation = await evalInPage(PAGE_WATCH_INSTALL);
     if (typeof generation === 'number') lastWatchGeneration = generation;
@@ -547,11 +576,11 @@ function stopPageWatch() {
 }
 
 async function pollPageWatch() {
-  if (analyzing) return;
+  if (!panelVisible || analyzing) return;
   try {
     const info = /** @type {{ gen: number, url: string, readyState: string } | null} */ (
       await evalInPage(`(() => ({
-        gen: (window.__SCHEMA_DEVTOOLS_WATCH__ && window.__SCHEMA_DEVTOOLS_WATCH__.generation) || 0,
+        gen: (window[Symbol.for('schema-devtools.watch')] && window[Symbol.for('schema-devtools.watch')].generation) || 0,
         url: location.href,
         readyState: document.readyState
       }))()`)
@@ -588,6 +617,7 @@ function init() {
       stopPageWatch();
       lastWatchGeneration = 0;
       snapshot = null;
+      if (!panelVisible) return;
       analyze({ silent: false, keepSelection: false })
         .then(() => startPageWatch())
         .catch((err) => showFatal(err instanceof Error ? err.message : 'Navigation analysis failed'));
