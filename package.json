@@ -5,6 +5,7 @@
   "description": "Schema DevTools — Chrome DevTools Extension for Structured Data (Schema.org / JSON-LD / Microdata / RDFa).",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "sandbox": "node scripts/dev.mjs",
     "test": "node scripts/test.mjs",
     "validate": "node scripts/validate-cli.mjs",
     "bundle": "node scripts/bundle-engine.mjs",

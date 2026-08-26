@@ -92,7 +92,7 @@ schema/
 ├── privacy.html             # Local-only privacy policy
 ├── README.md                # Project documentation
 ├── STORE.md                 # Chrome Web Store listing metadata
-├── dev/                     # Standalone local development sandbox
+├── sandbox/                 # Standalone local development sandbox
 │   ├── index.html           # Browser testbed for rapid UI development
 │   └── fixtures.js          # Realistic mock schema fixtures
 ├── vendor/                  # Vendored VanJS 1.6.1 & VanX 0.6.3 (zero-build)

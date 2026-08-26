@@ -18,7 +18,7 @@ const MIME_TYPES = {
 
 const server = createServer((req, res) => {
   let reqPath = new URL(req.url, `http://localhost:${PORT}`).pathname;
-  if (reqPath === '/' || reqPath === '/dev') reqPath = '/dev/index.html';
+  if (reqPath === '/' || reqPath === '/sandbox' || reqPath === '/dev') reqPath = '/sandbox/index.html';
 
   const filePath = join(root, reqPath);
   if (!existsSync(filePath)) {
