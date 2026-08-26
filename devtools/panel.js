@@ -289,7 +289,7 @@ function refTarget(value, map) {
   return null;
 }
 
-function selectEntity(entity, { inspect = true, highlight = true } = {}) {
+function selectEntity(entity, { inspect = false, highlight = true } = {}) {
   selectedEntityId = entity.id;
   renderEntities();
   if (activeView === 'findings') renderAllFindings();
@@ -420,7 +420,10 @@ function renderEntities() {
     meta.textContent = `${entity.format} · ${entity.id}`;
 
     li.append(typeSpan, meta);
-    li.addEventListener('click', () => selectEntity(entity));
+    li.title = 'Select this entity. Alt-click to reveal its source in Elements.';
+    li.addEventListener('click', (event) => {
+      selectEntity(entity, { inspect: event.altKey });
+    });
     li.addEventListener('mouseenter', () => highlightEntity(entity));
     list.append(li);
   }
@@ -834,7 +837,7 @@ async function inspectEntity(entity) {
       setStatus('The schema source node is no longer in the document', true);
       return;
     }
-    setStatus(`Inspecting ${entity.types.join(', ') || entity.id}`);
+    setStatus(`Opened ${entity.types.join(', ') || entity.id} in Elements`);
     highlightEntity(entity);
   } catch (err) {
     setStatus(err instanceof Error ? err.message : 'Inspect failed', true);
@@ -897,6 +900,15 @@ function setupTabs() {
 function setupActions() {
   $('btn-refresh').addEventListener('click', () => {
     analyze().catch((err) => setStatus(err instanceof Error ? err.message : 'Refresh failed', true));
+  });
+
+  $('btn-inspect').addEventListener('click', () => {
+    const entity = report?.entities.find((e) => e.id === selectedEntityId);
+    if (!entity) {
+      setStatus('Select an entity to inspect in Elements', true);
+      return;
+    }
+    inspectEntity(entity);
   });
 
   $('search').addEventListener('input', () => render());
