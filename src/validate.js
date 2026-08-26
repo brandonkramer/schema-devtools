@@ -80,6 +80,21 @@ function hasEntityPropertyPath(data, path, entities) {
 }
 
 /**
+ * Resolve a local JSON-LD node reference while preserving inline overrides.
+ * @param {unknown} value
+ * @param {Entity[]} entities
+ * @returns {Record<string, unknown>|null}
+ */
+function resolveEntityObject(value, entities) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const object = /** @type {Record<string, unknown>} */ (value);
+  const ref = object['@id'];
+  if (typeof ref !== 'string') return object;
+  const target = entities.find((entity) => entity.id === ref || entity.data['@id'] === ref);
+  return target ? { ...target.data, ...object } : object;
+}
+
+/**
  * Check if author name appears packed with commas (multiple authors in one string).
  * @param {Record<string, unknown>} data
  * @returns {boolean}
@@ -180,7 +195,7 @@ function validateFaqStructure(data) {
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
  */
-function validateBreadcrumbStructure(data) {
+function validateBreadcrumbStructure(data, entities) {
   /** @type {Finding[]} */
   const findings = [];
   const list = data.itemListElement;
@@ -205,7 +220,7 @@ function validateBreadcrumbStructure(data) {
       });
       return;
     }
-    const li = /** @type {Record<string, unknown>} */ (item);
+    const li = resolveEntityObject(item, entities) || {};
     const types = Array.isArray(li['@type']) ? li['@type'] : li['@type'] ? [li['@type']] : [];
     if (!types.some((type) => String(type).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '') === 'ListItem')) {
       findings.push({
@@ -215,7 +230,7 @@ function validateBreadcrumbStructure(data) {
         path: `itemListElement[${i}].@type`,
       });
     }
-    if (!hasProperty(li, 'name') && !hasPropertyPath(li, 'item.name')) {
+    if (!hasProperty(li, 'name') && !hasEntityPropertyPath(li, 'item.name', entities)) {
       findings.push({
         severity: 'error',
         code: 'BREADCRUMB_MISSING_NAME',
@@ -280,7 +295,7 @@ function validateWebSiteSearchAction(data) {
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
  */
-function validateQAPage(data) {
+function validateQAPage(data, entities) {
   /** @type {Finding[]} */
   const findings = [];
   const main = data.mainEntity;
@@ -304,7 +319,7 @@ function validateQAPage(data) {
       });
       return;
     }
-    const q = /** @type {Record<string, unknown>} */ (item);
+    const q = resolveEntityObject(item, entities) || {};
     const questionTypes = Array.isArray(q['@type']) ? q['@type'] : q['@type'] ? [q['@type']] : [];
     if (!questionTypes.some((type) => {
       const value = String(type);
@@ -344,7 +359,8 @@ function validateQAPage(data) {
     for (const [property, rawAnswers] of [['acceptedAnswer', q.acceptedAnswer], ['suggestedAnswer', q.suggestedAnswer]]) {
       const answers = Array.isArray(rawAnswers) ? rawAnswers : rawAnswers ? [rawAnswers] : [];
       answers.forEach((answer, answerIndex) => {
-        if (typeof answer !== 'object' || answer === null || !hasProperty(/** @type {Record<string, unknown>} */ (answer), 'text')) {
+        const resolvedAnswer = resolveEntityObject(answer, entities);
+        if (!resolvedAnswer || !hasEntityPropertyPath(resolvedAnswer, 'text', entities)) {
           findings.push({
             severity: 'error',
             code: 'QA_ANSWER_MISSING_TEXT',
@@ -363,7 +379,7 @@ function validateQAPage(data) {
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
  */
-function validateItemList(data) {
+function validateItemList(data, entities) {
   /** @type {Finding[]} */
   const findings = [];
   const rawItems = data.itemListElement;
@@ -391,7 +407,7 @@ function validateItemList(data) {
       });
       return;
     }
-    const listItem = /** @type {Record<string, unknown>} */ (item);
+    const listItem = resolveEntityObject(item, entities) || {};
     const listItemTypes = Array.isArray(listItem['@type']) ? listItem['@type'] : listItem['@type'] ? [listItem['@type']] : [];
     if (!listItemTypes.some((type) => String(type).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '') === 'ListItem')) {
       findings.push({
@@ -418,7 +434,7 @@ function validateItemList(data) {
       });
     }
     if (hasProperty(listItem, 'item')) {
-      if (!hasPropertyPath(listItem, 'item.name')) {
+      if (!hasEntityPropertyPath(listItem, 'item.name', entities)) {
         findings.push({
           severity: 'error',
           code: 'CAROUSEL_MISSING_ITEM_NAME',
@@ -426,7 +442,7 @@ function validateItemList(data) {
           path: `${path}.item.name`,
         });
       }
-      if (!hasPropertyPath(listItem, 'item.url')) {
+      if (!hasEntityPropertyPath(listItem, 'item.url', entities)) {
         findings.push({
           severity: 'error',
           code: 'CAROUSEL_MISSING_ITEM_URL',
@@ -434,9 +450,9 @@ function validateItemList(data) {
           path: `${path}.item.url`,
         });
       }
-      const nested = listItem.item;
-      if (typeof nested === 'object' && nested !== null) {
-        const type = /** @type {Record<string, unknown>} */ (nested)['@type'];
+      const nested = resolveEntityObject(listItem.item, entities);
+      if (nested) {
+        const type = nested['@type'];
         const typeList = Array.isArray(type) ? type : type ? [type] : [];
         const normalizedTypes = new Set(typeList.map((value) => {
           return String(value).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '');
@@ -472,12 +488,13 @@ function validateItemList(data) {
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
  */
-function validateProductGroup(data) {
+function validateProductGroup(data, entities) {
   const rawVariants = data.hasVariant;
   const variants = Array.isArray(rawVariants) ? rawVariants : rawVariants ? [rawVariants] : [];
   if (variants.length === 0 || hasProperty(data, 'productGroupID')) return [];
   if (variants.some((variant) => {
-    return typeof variant === 'object' && variant !== null && hasProperty(/** @type {Record<string, unknown>} */ (variant), 'inProductGroupWithID');
+    const resolved = resolveEntityObject(variant, entities);
+    return Boolean(resolved && hasProperty(resolved, 'inProductGroupWithID'));
   })) return [];
   return [{
     severity: 'error',
@@ -516,10 +533,11 @@ function validateDiscussionPost(data) {
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
  */
-function validateProfilePage(data) {
+function validateProfilePage(data, entities) {
   const main = data.mainEntity;
   if (main === undefined || main === null) return [];
-  if (typeof main !== 'object' || Array.isArray(main)) {
+  const entity = resolveEntityObject(main, entities);
+  if (!entity) {
     return [{
       severity: 'error',
       code: 'PROFILE_INVALID_MAIN_ENTITY',
@@ -528,7 +546,6 @@ function validateProfilePage(data) {
       docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/profile-page',
     }];
   }
-  const entity = /** @type {Record<string, unknown>} */ (main);
   const types = entity['@type'];
   const typeList = Array.isArray(types) ? types : types ? [types] : [];
   const isProfileSubject = typeList.some((type) => {
@@ -544,7 +561,7 @@ function validateProfilePage(data) {
       docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/profile-page',
     }];
   }
-  if (hasProperty(entity, 'name') || hasProperty(entity, 'alternateName')) return [];
+  if (hasEntityPropertyPath(entity, 'name', entities) || hasEntityPropertyPath(entity, 'alternateName', entities)) return [];
   return [{
     severity: 'error',
     code: 'PROFILE_MISSING_IDENTITY',
@@ -790,7 +807,7 @@ function validateEntity(entity, entities) {
   }
 
   if (types.includes('BreadcrumbList')) {
-    findings.push(...validateBreadcrumbStructure(data).map((f) => ({ ...f, entityId: id })));
+    findings.push(...validateBreadcrumbStructure(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('WebSite')) {
@@ -809,15 +826,15 @@ function validateEntity(entity, entities) {
   }
 
   if (types.includes('QAPage')) {
-    findings.push(...validateQAPage(data).map((f) => ({ ...f, entityId: id })));
+    findings.push(...validateQAPage(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('ItemList')) {
-    findings.push(...validateItemList(data).map((f) => ({ ...f, entityId: id })));
+    findings.push(...validateItemList(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('ProductGroup')) {
-    findings.push(...validateProductGroup(data).map((f) => ({ ...f, entityId: id })));
+    findings.push(...validateProductGroup(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('DiscussionForumPosting') || types.includes('SocialMediaPosting')) {
@@ -825,7 +842,7 @@ function validateEntity(entity, entities) {
   }
 
   if (types.includes('ProfilePage')) {
-    findings.push(...validateProfilePage(data).map((f) => ({ ...f, entityId: id })));
+    findings.push(...validateProfilePage(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('MerchantReturnPolicy')) {

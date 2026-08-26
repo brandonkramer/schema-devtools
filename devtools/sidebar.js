@@ -358,10 +358,15 @@ function filterFindingsForNode(nodeInfo) {
   }).slice(0, 12);
 }
 
-async function ensureFindings() {
-  if (lastSnapshot) return;
+async function ensureFindings(refresh = false) {
+  if (lastSnapshot && !refresh) return;
   if (!EXTRACT_SOURCE || typeof normalize !== 'function' || typeof validate !== 'function') {
     throw new Error('Schema engine failed to load.');
+  }
+  if (refresh) {
+    lastSnapshot = null;
+    lastFindings = [];
+    lastEntities = [];
   }
   const run = pageRun;
   try {
@@ -396,7 +401,7 @@ async function onSelectionChanged() {
       showEmpty();
       return;
     }
-    await ensureFindings();
+    await ensureFindings(true);
     if (run !== selectionRun) return;
     showContent(nodeInfo);
   } catch (err) {

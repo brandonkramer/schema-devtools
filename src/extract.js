@@ -12,8 +12,12 @@ export function extractPageSchema() {
   const MAX_JSONLD_BLOCKS = 100;
   const MAX_JSONLD_CHARS = 500_000;
   const MAX_MARKUP_NODES = 500;
+  const MAX_MARKUP_PROPERTIES = 10_000;
   const MAX_NESTING = 50;
   const MAX_TEXT_CHARS = 100_000;
+  const MAX_MARKUP_TEXT_CHARS = 1_000_000;
+  let markupPropertyCount = 0;
+  let markupTextChars = 0;
 
   /** @param {Element} el */
   function buildSelector(el) {
@@ -61,12 +65,22 @@ export function extractPageSchema() {
    */
   function addProperties(props, names, value) {
     for (const name of names.split(/\s+/).filter(Boolean)) {
+      if (markupPropertyCount >= MAX_MARKUP_PROPERTIES) return;
+      if (name.length > 500) continue;
+      let boundedValue = value;
+      if (typeof boundedValue === 'string') {
+        const remaining = MAX_MARKUP_TEXT_CHARS - markupTextChars;
+        if (remaining <= 0) return;
+        boundedValue = boundedValue.slice(0, Math.min(MAX_TEXT_CHARS, remaining));
+        markupTextChars += boundedValue.length;
+      }
+      markupPropertyCount++;
       if (props[name] === undefined) {
-        props[name] = value;
+        props[name] = boundedValue;
       } else if (Array.isArray(props[name])) {
-        /** @type {unknown[]} */ (props[name]).push(value);
+        /** @type {unknown[]} */ (props[name]).push(boundedValue);
       } else {
-        props[name] = [props[name], value];
+        props[name] = [props[name], boundedValue];
       }
     }
   }
@@ -123,6 +137,7 @@ export function extractPageSchema() {
     }
 
     for (const { el, root } of propEls) {
+      if (markupPropertyCount >= MAX_MARKUP_PROPERTIES || markupTextChars >= MAX_MARKUP_TEXT_CHARS) break;
       let between = el.parentElement;
       const stop = root.parentElement;
       while (between && between !== stop) {
@@ -226,6 +241,7 @@ export function extractPageSchema() {
     const props = /** @type {Record<string, unknown>} */ ({});
     const propEls = el.querySelectorAll('[property], [rel]');
     for (const propEl of propEls) {
+      if (markupPropertyCount >= MAX_MARKUP_PROPERTIES || markupTextChars >= MAX_MARKUP_TEXT_CHARS) break;
       if (!el.contains(propEl) || propEl === el) continue;
       let between = propEl.parentElement;
       while (between && between !== el) {

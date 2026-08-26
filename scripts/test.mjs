@@ -296,6 +296,15 @@ const invalidQa = runInspect({
 });
 assert(hasCode(invalidQa, 'QA_MISSING_ANSWER_COUNT'));
 assert(hasCode(invalidQa, 'QA_ANSWER_MISSING_TEXT'));
+const referencedQa = runInspect({
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@type': 'QAPage', mainEntity: { '@id': '#question' } },
+    { '@id': '#question', '@type': 'Question', name: 'Question?', answerCount: 1, acceptedAnswer: { '@id': '#answer' } },
+    { '@id': '#answer', '@type': 'Answer', text: 'Answer.' },
+  ],
+});
+assert(!referencedQa.findings.some((finding) => finding.code.startsWith('QA_')));
 
 const validCarousel = runInspect({
   '@context': 'https://schema.org', '@type': 'ItemList',
@@ -361,6 +370,15 @@ const referencedReview = runInspect({
 });
 assert(!hasCode(referencedReview, 'MISSING_ITEMREVIEWED_NAME'));
 assert(!hasCode(referencedReview, 'MISSING_AUTHOR_NAME'));
+const referencedProfile = runInspect({
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@type': 'ProfilePage', mainEntity: { '@id': '#person' } },
+    { '@id': '#person', '@type': 'Person', name: 'Author' },
+  ],
+});
+assert(!hasCode(referencedProfile, 'PROFILE_INVALID_MAIN_ENTITY'));
+assert(!hasCode(referencedProfile, 'PROFILE_MISSING_IDENTITY'));
 
 const nestedMicrodata = {
   url: 'https://example.test/page', title: 'Example', canonical: null, robots: null, inspectedAt: '',
@@ -415,6 +433,8 @@ assert(EXTRACT_SOURCE.includes("rel.includes('describedby')"));
 assert(!EXTRACT_SOURCE.includes('navigator.modelContext'));
 assert(EXTRACT_SOURCE.includes("propEl.querySelectorAll('[typeof]')"), 'RDFa rel wrappers must resolve nested typed values.');
 assert(!EXTRACT_SOURCE.includes('properties.vocab = vocab'), 'RDFa vocab declarations must not become entity properties.');
+assert(EXTRACT_SOURCE.includes('MAX_MARKUP_PROPERTIES'), 'Markup extraction must cap serialized property counts.');
+assert(EXTRACT_SOURCE.includes('MAX_MARKUP_TEXT_CHARS'), 'Markup extraction must cap serialized text and attribute bytes.');
 
 // Manifest Checks
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
@@ -598,6 +618,7 @@ assert.match(sidebarHtml, /href="\.\.\/ui\/sidebar\.css"/, 'Sidebar HTML must li
 assert.match(sidebarHostJs, /from '\.\.\/ui\/sidebar-view\.js'/, 'Sidebar host must import ../ui/sidebar-view.js.');
 assert.match(sidebarHostJs, /hasRdfaRelation/, 'Sidebar RDFa source indexing must match nested relation extraction.');
 assert.match(sidebarHostJs, /candidate\.types\.some/, 'Sidebar must prefer properties from the normalized selected entity.');
+assert.match(sidebarHostJs, /ensureFindings\(true\)/, 'Sidebar selections must refresh findings after page mutations.');
 assert.match(panelApp, /from '\.\.\/vendor\/van\.js'/, 'Panel UI must use the vendored VanJS runtime.');
 assert.match(panelApp, /van\.tags/, 'Panel UI must use VanJS tag functions.');
 assert.match(sidebarViewJs, /van\.tags/, 'Sidebar view must use VanJS tag functions.');
