@@ -212,6 +212,47 @@ export const FIXTURES = {
     ],
   },
 
+  review: {
+    name: 'Critic Review & Product Rating (SERP Card)',
+    url: 'https://example.com/reviews/soundwave-pro',
+    canonical: 'https://example.com/reviews/soundwave-pro',
+    entities: [
+      {
+        id: 'https://example.com/reviews/soundwave-pro#review',
+        types: ['Review', 'CriticReview'],
+        format: 'jsonld',
+        sourceIndex: 0,
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'Review',
+          '@id': 'https://example.com/reviews/soundwave-pro#review',
+          itemReviewed: {
+            '@type': 'Product',
+            name: 'SoundWave Pro Wireless ANC Headphones',
+            image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500',
+          },
+          reviewRating: {
+            '@type': 'Rating',
+            ratingValue: '4.8',
+            bestRating: '5',
+            worstRating: '1',
+          },
+          author: {
+            '@type': 'Person',
+            name: 'David Miller',
+            jobTitle: 'Senior Audio Critic',
+          },
+          publisher: {
+            '@type': 'Organization',
+            name: 'Audiophile Tech Review',
+          },
+          datePublished: '2026-07-22',
+          reviewBody: 'The SoundWave Pro delivers exceptional active noise cancellation and rich acoustic dynamics that rival flagships twice its price point.',
+        },
+      },
+    ],
+  },
+
   job: {
     name: 'Job Posting & Career (Salary & Location)',
     url: 'https://example.com/careers/lead-devtools-engineer',

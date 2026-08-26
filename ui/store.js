@@ -397,6 +397,25 @@ function serpCardFor(entity) {
       image,
     };
   }
+  if (types.includes('Review') || types.includes('CriticReview') || types.includes('UserReview')) {
+    const item = data.itemReviewed && typeof data.itemReviewed === 'object' ? /** @type {Record<string, unknown>} */ (data.itemReviewed) : {};
+    const itemName = readText(item.name) || readText(data.name) || 'Reviewed Item';
+    const author = data.author && typeof data.author === 'object' ? readText(/** @type {Record<string, unknown>} */(data.author).name) : readText(data.author);
+    const rating = readRating(data.reviewRating || data);
+    const bits = [];
+    if (rating) bits.push(`${starString(rating.value, rating.best)} ${rating.value}/${rating.best}`);
+    if (author) bits.push(`By ${author}`);
+    if (data.datePublished) bits.push(readText(data.datePublished));
+    return {
+      entity,
+      kind: 'Review',
+      cite,
+      title: `${itemName} — Review`,
+      snippet: (readText(data.reviewBody || data.description) || '').slice(0, 160),
+      meta: bits.join(' · '),
+      image,
+    };
+  }
   return null;
 }
 
