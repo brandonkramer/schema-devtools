@@ -1,4 +1,4 @@
-import { mountSidebar, store } from '../ui/sidebar.js';
+import { mountSidebar, store } from '../ui/sidebar-view.js';
 import { formatEvalException, listen } from './host.js';
 
 const engine = globalThis.SchemaDT || {};

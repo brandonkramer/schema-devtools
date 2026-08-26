@@ -250,10 +250,19 @@ const themeCss = readFileSync(new URL('ui/theme.css', root), 'utf8');
 const vanJs = readFileSync(new URL('vendor/van.js', root), 'utf8');
 const vanXJs = readFileSync(new URL('vendor/van-x.js', root), 'utf8');
 
+const sidebarHostJs = readFileSync(new URL('devtools/sidebar.js', root), 'utf8');
+const sidebarHtml = readFileSync(new URL('devtools/sidebar.html', root), 'utf8');
+const sidebarViewJs = readFileSync(new URL('ui/sidebar-view.js', root), 'utf8');
+
 assert.match(panelHtml, /type="module" src="panel.js"/, 'Panel must load as an ES module.');
+assert.match(panelHtml, /href="\.\.\/ui\/panel\.css"/, 'Panel HTML must link ../ui/panel.css.');
+assert.match(sidebarHtml, /href="\.\.\/ui\/sidebar\.css"/, 'Sidebar HTML must link ../ui/sidebar.css.');
+assert.match(sidebarHostJs, /from '\.\.\/ui\/sidebar-view\.js'/, 'Sidebar host must import ../ui/sidebar-view.js.');
 assert.match(panelApp, /from '\.\.\/vendor\/van\.js'/, 'Panel UI must use the vendored VanJS runtime.');
 assert.match(panelApp, /van\.tags/, 'Panel UI must use VanJS tag functions.');
+assert.match(sidebarViewJs, /van\.tags/, 'Sidebar view must use VanJS tag functions.');
 assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel components must not assign innerHTML.');
+assert.doesNotMatch(sidebarViewJs, /\.innerHTML/, 'Sidebar view must not assign innerHTML.');
 assert.match(vanJs, /tags:/, 'Vendored VanJS must be self-contained in the extension.');
 assert.match(vanXJs, /reactive/, 'Vendored VanX must be self-contained in the extension.');
 assert.match(themeCss, /--sys-color-base/, 'Shared theme tokens must include DevTools system colors.');

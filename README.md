@@ -98,11 +98,13 @@ schema/
 ├── vendor/                  # Vendored VanJS 1.6.1 & VanX 0.6.3 (zero-build)
 │   ├── van.js
 │   └── van-x.js
-├── ui/                      # Modular VanJS reactive UI
+├── ui/                      # Modular VanJS reactive UI & Styles
 │   ├── store.js             # VanX deep reactive proxy store & actions
-│   ├── app.js               # Top-level panel layout orchestrator
-│   ├── sidebar.js           # Elements sidebar pane component
-│   ├── theme.css            # Chrome DevTools system color tokens
+│   ├── app.js               # Main Schema panel layout orchestrator
+│   ├── sidebar-view.js      # Elements sidebar VanJS view
+│   ├── theme.css            # System color & typography design tokens
+│   ├── panel.css            # Panel layout, tree, graph, & SERP styles
+│   ├── sidebar.css          # Elements sidebar styles
 │   ├── components/          # Reusable UI components
 │   │   ├── toolbar.js       # Main header toolbar & export menu
 │   │   ├── score-card.js    # Quality score ring & error badges
@@ -115,13 +117,13 @@ schema/
 │       └── graph.js         # Visual entity knowledge graph
 ├── devtools/                # Chrome DevTools host integration
 │   ├── devtools.html        # Entrypoint initializing Schema panel & Elements sidebar
-│   ├── devtools.js
+│   ├── devtools.js          # Chrome panel/sidebar registration
 │   ├── panel.html           # Main Schema DevTools panel container
 │   ├── panel.js             # Host eval, theme sync, SPA mutation poller
-│   ├── panel.css            # Styles for panel, SERP, graph, and sandbox
 │   ├── sidebar.html         # Elements panel Schema sidebar container
-│   ├── sidebar.js           # $0 DOM inspection host
-│   └── sidebar.css
+│   ├── sidebar.js           # $0 DOM inspection host controller
+│   ├── host.js              # Shared host utilities & exception formatting
+│   └── engine.classic.js    # Bundled schema engine (generated)
 ├── src/                     # Core extraction, validation & scoring engine
 │   ├── catalog/             # Modular declarative rule definitions
 │   │   ├── rich-results.js  # 23 Google Search gallery rules
