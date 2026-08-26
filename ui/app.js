@@ -70,9 +70,9 @@ export const PanelApp = () => {
               },
               label,
               () => {
-                if (id !== 'findings') return null;
+                if (id !== 'findings') return '';
                 const count = store.findings.length;
-                if (count === 0) return null;
+                if (count === 0) return '';
                 const hasError = store.findings.some((f) => f.severity === 'error');
                 const hasWarning = store.findings.some((f) => f.severity === 'warning');
                 const kind = hasError ? 'error' : hasWarning ? 'warning' : 'info';

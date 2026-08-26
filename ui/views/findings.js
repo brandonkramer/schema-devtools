@@ -32,12 +32,12 @@ export function FindingsList(all = true) {
               div(
                 { class: 'finding-header' },
                 span({ class: 'finding-code' }, finding.code),
-                finding.path ? span({ class: 'finding-path' }, finding.path) : null,
+                finding.path ? span({ class: 'finding-path' }, finding.path) : '',
               ),
               div({ class: 'finding-message' }, finding.message),
               finding.docsUrl && /^https?:\/\//i.test(finding.docsUrl)
                 ? a({ class: 'finding-docs', href: finding.docsUrl, target: '_blank', rel: 'noopener' }, 'Official Documentation ↗')
-                : null,
+                : '',
             ),
           ),
         ),

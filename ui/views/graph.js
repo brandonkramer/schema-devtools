@@ -57,7 +57,7 @@ export function GraphView() {
             ),
           ),
         )
-      : null,
+      : '',
     div(
       { class: 'graph-section' },
       div({ class: 'graph-section-title' }, 'All Entity Nodes'),
@@ -76,7 +76,7 @@ export function GraphView() {
               span({ class: `format-chip format-${node.format}` }, node.format),
             ),
             div({ class: 'graph-card-label' }, entityLabel(node)),
-            isOrphan ? span({ class: 'orphan-tag' }, 'Standalone') : null,
+            isOrphan ? span({ class: 'orphan-tag' }, 'Standalone') : '',
           );
         }),
       ),

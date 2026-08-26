@@ -44,7 +44,7 @@ export function SerpView() {
           { class: 'serp-card-body' },
           div(
             { class: 'serp-snippet-wrap' },
-            card.meta ? div({ class: 'serp-meta' }, card.meta) : null,
+            card.meta ? div({ class: 'serp-meta' }, card.meta) : '',
             div({ class: 'serp-snippet' }, card.snippet),
           ),
         ),

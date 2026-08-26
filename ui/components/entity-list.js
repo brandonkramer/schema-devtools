@@ -35,7 +35,7 @@ export function EntityListPane() {
               span({ class: 'entity-type' }, entity.types.join(', ') || 'Unknown'),
               span({ class: `format-chip format-${entity.format}` }, entity.format),
             ),
-            label ? div({ class: 'entity-label', title: label }, label) : null,
+            label ? div({ class: 'entity-label', title: label }, label) : '',
           );
         }),
       );

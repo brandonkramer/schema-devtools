@@ -113,13 +113,14 @@ const SIDEBAR_INSPECT_SOURCE = `(() => { try { return JSON.stringify((${function
       }
     });
     let sourceRoot = rdfaRoot;
-    while (sourceRoot.hasAttribute('property')) {
+    while (true) {
       const parentType = sourceRoot.parentElement?.closest('[typeof]');
-      if (!parentType) break;
+      if (!parentType || !hasRdfaRelation(sourceRoot, parentType)) break;
       sourceRoot = parentType;
     }
     const topTypes = Array.from(document.querySelectorAll('[typeof]')).filter((node) => {
-      return (!node.hasAttribute('property') && !node.hasAttribute('rel')) || !node.parentElement?.closest('[typeof]');
+      const parentType = node.parentElement?.closest('[typeof]');
+      return !parentType || !hasRdfaRelation(node, parentType);
     });
     return {
       empty: false,
@@ -145,6 +146,15 @@ const SIDEBAR_INSPECT_SOURCE = `(() => { try { return JSON.stringify((${function
       }
     }
     return value;
+  }
+
+  function hasRdfaRelation(node, parentType) {
+    let current = node;
+    while (current && current !== parentType) {
+      if (current.hasAttribute('property') || current.hasAttribute('rel')) return true;
+      current = current.parentElement;
+    }
+    return false;
   }
 
   function isJsonLdScript(node) {
@@ -276,16 +286,41 @@ function showEmpty(message = 'No schema on this node') {
 function showContent(nodeInfo) {
   const format = String(nodeInfo.format || '');
   const types = /** @type {string[]} */ (nodeInfo.types || []);
-  const properties = /** @type {Record<string, unknown>} */ (nodeInfo.properties || {});
-  const keys = Object.keys(properties);
+  const sourceIndex = Number(nodeInfo.sourceIndex);
+  const entity = Number.isInteger(sourceIndex) && sourceIndex >= 0
+    ? lastEntities.find((candidate) => {
+        return candidate.format === format && candidate.sourceIndex === sourceIndex &&
+          candidate.types.some((type) => types.includes(type));
+      })
+    : null;
+  const properties = entity?.data || /** @type {Record<string, unknown>} */ (nodeInfo.properties || {});
+  const keys = Object.keys(properties).filter((key) => !key.startsWith('@'));
   store.empty = false;
   store.message = '';
   store.format = format;
   store.types = types.join(', ') || 'Unknown';
   store.properties = keys.length === 0
     ? [{ key: '—', value: 'No key properties' }]
-    : keys.map((key) => ({ key, value: String(properties[key] ?? '') }));
+    : keys.map((key) => ({ key, value: summarizeValue(properties[key]) }));
   store.findings = filterFindingsForNode(nodeInfo);
+}
+
+function summarizeValue(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value).slice(0, 120);
+  if (Array.isArray(value)) return value.length > 1 ? `${summarizeValue(value[0])} (+${value.length - 1})` : summarizeValue(value[0]);
+  if (typeof value === 'object') {
+    const object = /** @type {Record<string, unknown>} */ (value);
+    if ('name' in object) return summarizeValue(object.name);
+    if ('@id' in object) return summarizeValue(object['@id']);
+    if ('@type' in object) return summarizeValue(object['@type']);
+    try {
+      return JSON.stringify(value).slice(0, 120);
+    } catch {
+      return '[Object]';
+    }
+  }
+  return String(value).slice(0, 120);
 }
 
 /**

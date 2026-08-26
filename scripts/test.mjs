@@ -233,6 +233,135 @@ const breadcrumb = runInspect({
 });
 assert(!hasCode(breadcrumb, 'BREADCRUMB_MISSING_ITEM'));
 
+const videoWithoutDescription = runInspect({
+  '@context': 'https://schema.org',
+  '@type': 'VideoObject',
+  name: 'Video',
+  thumbnailUrl: 'https://example.test/video.jpg',
+  uploadDate: '2026-08-26',
+});
+assert(!hasCode(videoWithoutDescription, 'MISSING_DESCRIPTION'));
+assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Product', name: 'Product' }), 'MISSING_OFFERS_OR_REVIEW_OR_AGGREGATERATING'));
+for (const signal of ['offers', 'review', 'aggregateRating']) {
+  const value = signal === 'aggregateRating'
+    ? { '@type': 'AggregateRating', ratingValue: 5, ratingCount: 1 }
+    : { '@type': signal === 'offers' ? 'Offer' : 'Review', name: 'Signal' };
+  const product = runInspect({ '@context': 'https://schema.org', '@type': 'Product', name: 'Product', [signal]: value });
+  assert(!hasCode(product, 'MISSING_OFFERS_OR_REVIEW_OR_AGGREGATERATING'));
+}
+
+const eventWithoutAddress = runInspect({
+  '@context': 'https://schema.org', '@type': 'Event', name: 'Event', startDate: '2026-09-01',
+  location: { '@type': 'Place', name: 'Venue' },
+});
+assert(hasCode(eventWithoutAddress, 'MISSING_LOCATION_ADDRESS'));
+
+const remoteJob = runInspect({
+  '@context': 'https://schema.org', '@type': 'JobPosting', title: 'Engineer', description: 'Build things', datePosted: '2026-08-26',
+  hiringOrganization: { '@type': 'Organization', name: 'Example' },
+  applicantLocationRequirements: { '@type': 'Country', name: 'US' }, jobLocationType: 'TELECOMMUTE',
+});
+assert(!hasCode(remoteJob, 'MISSING_JOBLOCATION_OR_APPLICANTLOCATIONREQUIREMENTS'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'JobPosting', title: 'Engineer', description: 'Build things', datePosted: '2026-08-26',
+  hiringOrganization: { '@type': 'Organization', name: 'Example' },
+}), 'MISSING_JOBLOCATION_OR_APPLICANTLOCATIONREQUIREMENTS'));
+
+const shortBreadcrumb = runInspect({
+  '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+  itemListElement: [{ '@type': 'ListItem', item: { '@id': 'https://example.test/', name: 'Home' } }],
+});
+assert.equal(shortBreadcrumb.findings.find((finding) => finding.code === 'BREADCRUMB_TOO_SHORT')?.severity, 'error');
+assert.equal(shortBreadcrumb.findings.find((finding) => finding.code === 'BREADCRUMB_MISSING_POSITION')?.severity, 'error');
+assert(!hasCode(shortBreadcrumb, 'BREADCRUMB_MISSING_NAME'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+  itemListElement: [
+    { position: 1, name: 'Home', item: 'https://example.test/' },
+    { '@type': 'ListItem', position: 2, name: 'Current' },
+  ],
+}), 'BREADCRUMB_INVALID_LIST_ITEM'));
+
+const validQa = runInspect({
+  '@context': 'https://schema.org', '@type': 'QAPage',
+  mainEntity: {
+    '@type': 'Question', name: 'Question?', answerCount: 1,
+    acceptedAnswer: { '@type': 'Answer', text: 'Answer.' },
+  },
+});
+assert(!validQa.findings.some((finding) => finding.code.startsWith('QA_')));
+const invalidQa = runInspect({
+  '@context': 'https://schema.org', '@type': 'QAPage',
+  mainEntity: { '@type': 'Question', name: 'Question?', acceptedAnswer: { '@type': 'Answer' } },
+});
+assert(hasCode(invalidQa, 'QA_MISSING_ANSWER_COUNT'));
+assert(hasCode(invalidQa, 'QA_ANSWER_MISSING_TEXT'));
+
+const validCarousel = runInspect({
+  '@context': 'https://schema.org', '@type': 'ItemList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, url: 'https://example.test/one' },
+    { '@type': 'ListItem', position: 2, url: 'https://example.test/two' },
+  ],
+});
+assert(!validCarousel.findings.some((finding) => finding.code.startsWith('CAROUSEL_')));
+const mixedCarousel = runInspect({
+  '@context': 'https://schema.org', '@type': 'ItemList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, item: { '@type': 'Recipe', name: 'One', url: 'https://example.test/#one' } },
+    { '@type': 'ListItem', position: 2, item: { '@type': 'Course', name: 'Two', url: 'https://example.test/#two' } },
+  ],
+});
+assert(hasCode(mixedCarousel, 'CAROUSEL_MIXED_ITEM_TYPES'));
+const coTypedCarousel = runInspect({
+  '@context': 'https://schema.org', '@type': 'ItemList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, item: { '@type': ['Restaurant', 'LocalBusiness'], name: 'One', url: 'https://example.test/#one' } },
+    { '@type': 'ListItem', position: 2, item: { '@type': 'Restaurant', name: 'Two', url: 'https://example.test/#two' } },
+  ],
+});
+assert(!hasCode(coTypedCarousel, 'CAROUSEL_MIXED_ITEM_TYPES'));
+assert(!hasCode(coTypedCarousel, 'CAROUSEL_UNSUPPORTED_ITEM_TYPE'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'ItemList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, item: { '@type': 'Book', name: 'One', url: 'https://example.test/#one' } },
+    { '@type': 'ListItem', position: 2, item: { '@type': 'Book', name: 'Two', url: 'https://example.test/#two' } },
+  ],
+}), 'CAROUSEL_UNSUPPORTED_ITEM_TYPE'));
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'ItemList',
+  itemListElement: [{ '@type': 'ListItem', position: 1, url: 'https://example.test/one' }],
+}), 'CAROUSEL_TOO_SHORT'));
+
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'ProductGroup', name: 'Group',
+  hasVariant: [{ '@type': 'Product', name: 'Variant' }],
+}), 'PRODUCT_GROUP_MISSING_ID'));
+assert(!hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'ProductGroup', name: 'Group', productGroupID: 'GROUP-1',
+  hasVariant: [{ '@type': 'Product', name: 'Variant' }],
+}), 'PRODUCT_GROUP_MISSING_ID'));
+
+assert(hasCode(runInspect({
+  '@context': 'https://schema.org', '@type': 'Product', name: 'Product',
+  aggregateRating: { '@type': 'AggregateRating', ratingValue: 5 },
+}), 'RATING_MISSING_COUNT'));
+for (const type of ['MiddleSchool', 'Preschool', 'TouristAttraction']) {
+  assert(!hasCode(runInspect({ '@context': 'https://schema.org', '@type': type, name: type }), 'MISSING_ADDRESS'));
+}
+
+const referencedReview = runInspect({
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@id': '#review', '@type': 'Review', itemReviewed: { '@id': '#product' }, reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@id': '#author' } },
+    { '@id': '#product', '@type': 'Product', name: 'Product', review: { '@id': '#review' } },
+    { '@id': '#author', '@type': 'Person', name: 'Author' },
+  ],
+});
+assert(!hasCode(referencedReview, 'MISSING_ITEMREVIEWED_NAME'));
+assert(!hasCode(referencedReview, 'MISSING_AUTHOR_NAME'));
+
 const nestedMicrodata = {
   url: 'https://example.test/page', title: 'Example', canonical: null, robots: null, inspectedAt: '',
   jsonld: [],
@@ -467,6 +596,8 @@ assert.match(panelHtml, /type="module" src="panel.js"/, 'Panel must load as an E
 assert.match(panelHtml, /href="\.\.\/ui\/panel\.css"/, 'Panel HTML must link ../ui/panel.css.');
 assert.match(sidebarHtml, /href="\.\.\/ui\/sidebar\.css"/, 'Sidebar HTML must link ../ui/sidebar.css.');
 assert.match(sidebarHostJs, /from '\.\.\/ui\/sidebar-view\.js'/, 'Sidebar host must import ../ui/sidebar-view.js.');
+assert.match(sidebarHostJs, /hasRdfaRelation/, 'Sidebar RDFa source indexing must match nested relation extraction.');
+assert.match(sidebarHostJs, /candidate\.types\.some/, 'Sidebar must prefer properties from the normalized selected entity.');
 assert.match(panelApp, /from '\.\.\/vendor\/van\.js'/, 'Panel UI must use the vendored VanJS runtime.');
 assert.match(panelApp, /van\.tags/, 'Panel UI must use VanJS tag functions.');
 assert.match(sidebarViewJs, /van\.tags/, 'Sidebar view must use VanJS tag functions.');
@@ -491,6 +622,9 @@ assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel templates must not assign in
 assert.doesNotMatch(toolbarJs, /\.innerHTML/, 'Toolbar must not assign innerHTML.');
 assert.doesNotMatch(entityListJs, /\.innerHTML/, 'Entity list must not assign innerHTML.');
 assert.doesNotMatch(panelJs, /\.innerHTML/, 'Panel analysis must not assign innerHTML.');
+const compareSource = readFileSync(new URL('scripts/compare.mjs', root), 'utf8');
+assert.doesNotMatch(compareSource, /Highly Consistent/, 'Validator comparison must not infer semantic parity from error counts.');
+assert.match(compareSource, /Type alignment:/, 'Validator comparison must report type alignment independently.');
 assert.doesNotMatch(readFileSync(new URL('ui/views/serp.js', root), 'utf8'), /src:\s*card\.image/, 'SERP previews must not request inspected-page images.');
 assert.match(panelJs, /listen\(chrome\.devtools\?\.network\?\.onNavigated/, 'Navigation refresh must not assume network.onNavigated exists.');
 assert.match(panelJs, /formatEvalException/, 'Eval failures must format Chrome exceptionInfo.');

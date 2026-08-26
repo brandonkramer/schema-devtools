@@ -92,7 +92,7 @@ async function compareSnapshot(name, url, canonical, entitiesList) {
     process.exitCode = 1;
     return false;
   }
-  const smvNodes = smvData.tripleGroups?.[0]?.nodes || [];
+  const smvNodes = (smvData.tripleGroups || []).flatMap((group) => group.nodes || []);
   const smvErrors = smvNodes.reduce((acc, n) => acc + (n.errors?.length || 0), 0);
 
   console.log(`📌 Extracted Types:`);
@@ -111,8 +111,14 @@ async function compareSnapshot(name, url, canonical, entitiesList) {
     if (findings.length > 4) console.log(`   • ...and ${findings.length - 4} more recommendations`);
   }
 
-  const isConsistent = quality.errorCount === smvErrors;
-  console.log(`\n🎯 Result: ${isConsistent ? '✅ Highly Consistent' : '⚠️ Divergence Detected'}`);
+  const localTypes = new Set(entities.flatMap((entity) => entity.types));
+  const validatorTypes = new Set(smvNodes.flatMap((node) => {
+    return (node.types || []).map((type) => String(type.value || '').replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, ''));
+  }));
+  const missingTypes = [...localTypes].filter((type) => !validatorTypes.has(type));
+  const typeAlignment = missingTypes.length === 0;
+  console.log(`\n🎯 Type alignment: ${typeAlignment ? '✅ All local top-level types were recognized' : `⚠️ Missing from validator output: ${missingTypes.join(', ')}`}`);
+  console.log(`   validator.schema reported ${smvErrors} schema vocabulary error${smvErrors === 1 ? '' : 's'}; local errors above include separate Google eligibility guidance.`);
   return true;
 }
 

@@ -77,11 +77,11 @@ export function TreeValue(value, idMap, path = 'root', entityId = '', depth = 0)
           onclick: () => actions.toggleCollapse(collapseKey),
         },
         `Array(${value.length})`,
-        () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ' [...]') : null),
+        () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ' [...]') : ''),
       ),
       () =>
         store.collapsedPaths[collapseKey]
-          ? null
+          ? ''
           : div(
               { class: 'tree-children' },
               value.map((item, index) => {
@@ -114,11 +114,11 @@ export function TreeValue(value, idMap, path = 'root', entityId = '', depth = 0)
         onclick: () => actions.toggleCollapse(collapseKey),
       },
       obj['@type'] ? String(obj['@type']) : 'Object',
-      () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ` ${previewObject(obj)}`) : null),
+      () => (store.collapsedPaths[collapseKey] ? span({ class: 'dt-preview' }, ` ${previewObject(obj)}`) : ''),
     ),
     () =>
       store.collapsedPaths[collapseKey]
-        ? null
+        ? ''
         : div(
             { class: 'tree-children' },
             keys.map((key) => {

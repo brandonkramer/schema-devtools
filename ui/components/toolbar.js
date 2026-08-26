@@ -57,91 +57,91 @@ export function Toolbar() {
           ' Export ',
           span({ class: 'caret' }, '▾'),
         ),
-        () =>
-          store.exportMenuOpen
-            ? div(
-                { class: 'dropdown-menu' },
-                button(
-                  {
-                    type: 'button',
-                    class: 'menu-item',
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      actions.copyJson();
-                      actions.closeExportMenu();
-                    },
-                  },
-                  span('Copy JSON'),
-                  small('Selected entity'),
-                ),
-                button(
-                  {
-                    type: 'button',
-                    class: 'menu-item',
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      actions.copyScript();
-                      actions.closeExportMenu();
-                    },
-                  },
-                  span('Copy <script> Tag'),
-                  small('JSON-LD'),
-                ),
-                div({ class: 'menu-sep' }),
-                button(
-                  {
-                    type: 'button',
-                    class: 'menu-item',
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      actions.copyBundle();
-                      actions.closeExportMenu();
-                    },
-                  },
-                  span('Copy Agent Bundle'),
-                  small('AI JSON'),
-                ),
-                button(
-                  {
-                    type: 'button',
-                    class: 'menu-item',
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      actions.copyMarkdown();
-                      actions.closeExportMenu();
-                    },
-                  },
-                  span('Copy Agent Markdown'),
-                  small('Prompt ready'),
-                ),
-                button(
-                  {
-                    type: 'button',
-                    class: 'menu-item',
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      actions.copyAiPrompt();
-                      actions.closeExportMenu();
-                    },
-                  },
-                  span('Copy for AI Prompt'),
-                  small('LLM / RAG prompt'),
-                ),
-                div({ class: 'menu-sep' }),
-                button(
-                  {
-                    type: 'button',
-                    class: 'menu-item',
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      actions.downloadJson();
-                      actions.closeExportMenu();
-                    },
-                  },
-                  span('Download Report (.json)'),
-                ),
-              )
-            : null,
+        div(
+          {
+            class: 'dropdown-menu',
+            style: () => (store.exportMenuOpen ? 'display: block;' : 'display: none;'),
+          },
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.copyJson();
+                actions.closeExportMenu();
+              },
+            },
+            span('Copy JSON'),
+            small('Selected entity'),
+          ),
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.copyScript();
+                actions.closeExportMenu();
+              },
+            },
+            span('Copy <script> Tag'),
+            small('JSON-LD'),
+          ),
+          div({ class: 'menu-sep' }),
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.copyBundle();
+                actions.closeExportMenu();
+              },
+            },
+            span('Copy Agent Bundle'),
+            small('AI JSON'),
+          ),
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.copyMarkdown();
+                actions.closeExportMenu();
+              },
+            },
+            span('Copy Agent Markdown'),
+            small('Prompt ready'),
+          ),
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.copyAiPrompt();
+                actions.closeExportMenu();
+              },
+            },
+            span('Copy for AI Prompt'),
+            small('LLM / RAG prompt'),
+          ),
+          div({ class: 'menu-sep' }),
+          button(
+            {
+              type: 'button',
+              class: 'menu-item',
+              onclick: (e) => {
+                e.stopPropagation();
+                actions.downloadJson();
+                actions.closeExportMenu();
+              },
+            },
+            span('Download Report (.json)'),
+          ),
+        ),
       ),
     ),
     div(
@@ -171,7 +171,7 @@ export function Toolbar() {
               },
               '✕',
             )
-          : null,
+          : '',
     ),
     div(
       { class: 'external-group' },

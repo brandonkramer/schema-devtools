@@ -1321,8 +1321,25 @@ function validateBreadcrumbStructure(data) {
   }
 
   items.forEach((item, i) => {
-    if (typeof item !== 'object' || item === null) return;
+    if (typeof item !== 'object' || item === null) {
+      findings.push({
+        severity: 'error',
+        code: 'BREADCRUMB_INVALID_LIST_ITEM',
+        message: `Breadcrumb item ${i + 1} must be a ListItem object.`,
+        path: `itemListElement[${i}]`,
+      });
+      return;
+    }
     const li = /** @type {Record<string, unknown>} */ (item);
+    const types = Array.isArray(li['@type']) ? li['@type'] : li['@type'] ? [li['@type']] : [];
+    if (!types.some((type) => String(type).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '') === 'ListItem')) {
+      findings.push({
+        severity: 'error',
+        code: 'BREADCRUMB_INVALID_LIST_ITEM',
+        message: `Breadcrumb item ${i + 1} must have @type ListItem.`,
+        path: `itemListElement[${i}].@type`,
+      });
+    }
     if (!hasProperty(li, 'name') && !hasPropertyPath(li, 'item.name')) {
       findings.push({
         severity: 'error',
@@ -1331,7 +1348,7 @@ function validateBreadcrumbStructure(data) {
         path: `itemListElement[${i}].name`,
       });
     }
-    if (li.position === undefined) {
+    if (!hasProperty(li, 'position')) {
       findings.push({
         severity: 'error',
         code: 'BREADCRUMB_MISSING_POSITION',
@@ -1384,29 +1401,6 @@ function validateWebSiteSearchAction(data) {
 }
 
 /**
- * Validate JobPosting hiringOrganization.
- * @param {Record<string, unknown>} data
- * @returns {Finding[]}
- */
-function validateJobPosting(data) {
-  /** @type {Finding[]} */
-  const findings = [];
-  const org = data.hiringOrganization;
-  if (typeof org === 'object' && org !== null) {
-    const o = /** @type {Record<string, unknown>} */ (org);
-    if (!hasProperty(o, 'name')) {
-      findings.push({
-        severity: 'error',
-        code: 'JOB_MISSING_ORG_NAME',
-        message: 'JobPosting hiringOrganization requires name.',
-        path: 'hiringOrganization.name',
-      });
-    }
-  }
-  return findings;
-}
-
-/**
  * Validate QAPage mainEntity.
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
@@ -1437,7 +1431,10 @@ function validateQAPage(data) {
     }
     const q = /** @type {Record<string, unknown>} */ (item);
     const questionTypes = Array.isArray(q['@type']) ? q['@type'] : q['@type'] ? [q['@type']] : [];
-    if (!questionTypes.some((type) => String(type).endsWith('Question'))) {
+    if (!questionTypes.some((type) => {
+      const value = String(type);
+      return value === 'Question' || /(?:schema\.org\/|schema:)Question$/.test(value);
+    })) {
       findings.push({
         severity: 'error',
         code: 'QA_INVALID_QUESTION',
@@ -1505,7 +1502,9 @@ function validateItemList(data) {
       docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/carousel',
     });
   }
-  const itemTypes = new Set();
+  /** @type {Set<string>[]} */
+  const itemTypeSets = [];
+  const supportedTypes = new Set(['Course', 'Movie', 'Recipe', 'Restaurant']);
   items.forEach((item, index) => {
     const path = `itemListElement[${index}]`;
     if (typeof item !== 'object' || item === null) {
@@ -1518,6 +1517,15 @@ function validateItemList(data) {
       return;
     }
     const listItem = /** @type {Record<string, unknown>} */ (item);
+    const listItemTypes = Array.isArray(listItem['@type']) ? listItem['@type'] : listItem['@type'] ? [listItem['@type']] : [];
+    if (!listItemTypes.some((type) => String(type).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '') === 'ListItem')) {
+      findings.push({
+        severity: 'error',
+        code: 'CAROUSEL_INVALID_LIST_ITEM',
+        message: `Carousel item ${index + 1} must have @type ListItem.`,
+        path: `${path}.@type`,
+      });
+    }
     if (!hasProperty(listItem, 'position')) {
       findings.push({
         severity: 'error',
@@ -1555,11 +1563,25 @@ function validateItemList(data) {
       if (typeof nested === 'object' && nested !== null) {
         const type = /** @type {Record<string, unknown>} */ (nested)['@type'];
         const typeList = Array.isArray(type) ? type : type ? [type] : [];
-        typeList.forEach((value) => itemTypes.add(String(value).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '')));
+        const normalizedTypes = new Set(typeList.map((value) => {
+          return String(value).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '');
+        }));
+        itemTypeSets.push(normalizedTypes);
+        if (![...normalizedTypes].some((value) => supportedTypes.has(value))) {
+          findings.push({
+            severity: 'error',
+            code: 'CAROUSEL_UNSUPPORTED_ITEM_TYPE',
+            message: `Carousel ListItem ${index + 1} must contain a Course, Movie, Recipe, or Restaurant item.`,
+            path: `${path}.item.@type`,
+          });
+        }
       }
     }
   });
-  if (itemTypes.size > 1) {
+  const sharedTypes = itemTypeSets.length
+    ? [...itemTypeSets[0]].filter((type) => itemTypeSets.every((types) => types.has(type)))
+    : [];
+  if (itemTypeSets.length > 1 && sharedTypes.length === 0) {
     findings.push({
       severity: 'error',
       code: 'CAROUSEL_MIXED_ITEM_TYPES',
@@ -1784,6 +1806,7 @@ function validateRatingObject(rating, path) {
 
 /**
  * @param {Entity} entity
+ * @param {Entity[]} entities
  * @returns {Finding[]}
  */
 function validateEntity(entity, entities) {
@@ -1908,10 +1931,6 @@ function validateEntity(entity, entities) {
       path: entity.path,
       docsUrl: 'https://developers.google.com/search/blog/2024/10/sitelinks-search-box',
     });
-  }
-
-  if (types.includes('JobPosting')) {
-    findings.push(...validateJobPosting(data).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('QAPage')) {
