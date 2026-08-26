@@ -363,6 +363,22 @@ function serpCardFor(entity) {
       image,
     };
   }
+  if (types.includes('VideoObject') || types.includes('MediaObject')) {
+    const upload = readText(data.uploadDate);
+    const duration = readText(data.duration);
+    const bits = [];
+    if (duration) bits.push(`▶ ${duration.replace(/^PT/, '')}`);
+    if (upload) bits.push(upload);
+    return {
+      entity,
+      kind: 'Video',
+      cite,
+      title: readText(data.name) || 'Video',
+      snippet: (readText(data.description) || '').slice(0, 160),
+      meta: bits.join(' · '),
+      image,
+    };
+  }
   if (types.includes('ProfilePage')) {
     const main = data.mainEntity && typeof data.mainEntity === 'object' ? /** @type {Record<string, unknown>} */ (data.mainEntity) : {};
     return {

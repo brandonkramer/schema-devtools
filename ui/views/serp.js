@@ -12,7 +12,7 @@ export function SerpView() {
       p({ class: 'empty-title' }, 'No SERP Preview Available'),
       p({
         class: 'empty-desc',
-      }, 'SERP simulation is available for Product, Article, Recipe, Breadcrumb, Event, Job, ProfilePage, and LocalBusiness entities.'),
+      }, 'SERP simulation is available for Product, Article, Recipe, Review, Video, Job, Event, Breadcrumb, ProfilePage, and LocalBusiness entities.'),
     );
   }
   return div(
