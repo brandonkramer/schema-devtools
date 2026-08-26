@@ -1,8 +1,21 @@
 {
   "name": "schema-devtools",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Schema DevTools — Chrome DevTools Extension for Structured Data (Schema.org / JSON-LD / Microdata / RDFa).",
+  "description": "Chrome DevTools Extension for inspecting, validating, and scoring structured data (Schema.org, JSON-LD, Microdata, RDFa).",
+  "license": "MIT",
+  "keywords": [
+    "schema",
+    "schema.org",
+    "json-ld",
+    "microdata",
+    "rdfa",
+    "devtools",
+    "chrome-extension",
+    "seo",
+    "rich-results"
+  ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "sandbox": "node scripts/dev.mjs",
@@ -11,7 +24,7 @@
     "validate": "node scripts/validate.mjs",
     "compare": "node scripts/compare.mjs"
   },
-  "dependencies": {
+  "devDependencies": {
     "vanjs-core": "1.6.1",
     "vanjs-ext": "0.6.3"
   }
