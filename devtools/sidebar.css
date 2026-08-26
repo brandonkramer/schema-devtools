@@ -1,5 +1,3 @@
-@import url("../ui/theme.css");
-
 body {
   background: var(--sys-color-base);
 }
