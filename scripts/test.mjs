@@ -424,9 +424,15 @@ store.query = 'imageobject';
 assert.equal(visibleEntities().map((entity) => entity.id).join(','), 'entity:2');
 assert.equal(matchesSearch('Article jsonld', 'article'), true);
 assert.equal(matchesSearch('Article jsonld', 'product'), false);
-store.query = '';
-store.entities = [{ id: 'restaurant:1', types: ['Restaurant'], format: 'jsonld', sourceIndex: 0, data: { name: 'Cafe' } }];
-assert.equal(serpCards().length, 1, 'LocalBusiness subtypes must have reachable SERP previews.');
+store.entities = [
+  { id: 'restaurant:1', types: ['Restaurant'], format: 'jsonld', sourceIndex: 0, data: { name: 'Cafe' } },
+  { id: 'review:1', types: ['Review'], format: 'jsonld', sourceIndex: 0, data: { name: 'Superb', reviewRating: { ratingValue: '5' } } },
+  { id: 'video:1', types: ['VideoObject'], format: 'jsonld', sourceIndex: 0, data: { name: 'Tutorial', duration: 'PT10M' } },
+];
+const cards = serpCards();
+assert.equal(cards.length, 3, 'Must generate cards for Restaurant, Review, and Video.');
+assert(cards.some((c) => c.kind === 'Review'), 'Review SERP card must be generated.');
+assert(cards.some((c) => c.kind === 'Video'), 'Video SERP card must be generated.');
 
 assert.equal(
   formatEvalException({ description: 'Operation failed: %s', details: ['Inspected tab was closed'] }),
