@@ -20,11 +20,17 @@
     "dev": "node scripts/dev.mjs",
     "sandbox": "node scripts/dev.mjs",
     "test": "node scripts/test.mjs",
+    "build": "node scripts/build.mjs",
     "bundle": "node scripts/bundle.mjs",
+    "package": "node scripts/package.mjs",
+    "size": "node scripts/size.mjs",
+    "test:dist": "node scripts/test-dist.mjs",
+    "release": "npm test && npm run test:dist && npm run package",
     "validate": "node scripts/validate.mjs",
     "compare": "node scripts/compare.mjs"
   },
   "devDependencies": {
+    "esbuild": "0.25.9",
     "vanjs-core": "1.6.1",
     "vanjs-ext": "0.6.3"
   }

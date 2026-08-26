@@ -1,5 +1,6 @@
 import van from '../../vendor/van.js';
-import { actions, serpCards } from '../store.js';
+import { serpCards } from '../features/serp.js';
+import { actions } from '../store.js';
 
 const { div, span, p, button, article } = van.tags;
 

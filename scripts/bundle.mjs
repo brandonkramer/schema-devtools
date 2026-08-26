@@ -10,6 +10,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const files = [
   'src/extract.js',
+  'src/extract-selection.js',
   'src/catalog/rich-results.js',
   'src/catalog/deprecations.js',
   'src/catalog/syntax.js',
@@ -43,6 +44,8 @@ ${body}
 global.SchemaDT = {
   extractPageSchema,
   EXTRACT_SOURCE,
+  inspectSelectedSchemaNode,
+  SELECTION_EXTRACT_SOURCE,
   normalize,
   stripSchemaPrefix,
   validate,

@@ -2,10 +2,6 @@ import van from '../vendor/van.js';
 import { EntityListPane } from './components/entity-list.js';
 import { Toolbar } from './components/toolbar.js';
 import { actions, entityIdIndex, selectedEntity, store } from './store.js';
-import { FindingsList } from './views/findings.js';
-import { GraphView } from './views/graph.js';
-import { RawView } from './views/raw.js';
-import { SerpView } from './views/serp.js';
 import { TreeView } from './views/tree.js';
 
 const { div, span, p, button, main, section, footer } = van.tags;
@@ -18,6 +14,49 @@ const VIEWS = [
   ['serp', 'SERP Preview'],
 ];
 
+const loadedViews = { tree: { TreeView } };
+const loadingViews = {};
+const viewErrors = {};
+const viewRevision = van.state(0);
+let lazyViews;
+const loadLazyViews = () => {
+  lazyViews ||= import('./views/lazy.js').catch((error) => {
+    lazyViews = null;
+    throw error;
+  });
+  return lazyViews;
+};
+const viewLoaders = {
+  raw: loadLazyViews,
+  graph: loadLazyViews,
+  findings: loadLazyViews,
+  serp: loadLazyViews,
+};
+
+async function loadView(id) {
+  if (loadedViews[id] || !viewLoaders[id]) return;
+  if (!loadingViews[id]) {
+    loadingViews[id] = viewLoaders[id]()
+      .then((module) => {
+        loadedViews[id] = module;
+        delete viewErrors[id];
+      })
+      .catch((error) => {
+        viewErrors[id] = error instanceof Error ? error.message : String(error);
+        delete loadingViews[id];
+      })
+      .finally(() => {
+        viewRevision.val++;
+      });
+  }
+  await loadingViews[id];
+}
+
+function activateView(id) {
+  store.activeView = id;
+  void loadView(id);
+}
+
 function EmptyDetail(title, desc, icon = '🔍') {
   return div(
     { class: 'empty-box' },
@@ -28,9 +67,20 @@ function EmptyDetail(title, desc, icon = '🔍') {
 }
 
 function Detail() {
-  if (store.activeView === 'graph') return GraphView();
-  if (store.activeView === 'findings') return FindingsList(true);
-  if (store.activeView === 'serp') return SerpView();
+  viewRevision.val;
+  const activeView = store.activeView;
+  const module = loadedViews[activeView];
+  if (!module) {
+    return EmptyDetail(
+      viewErrors[activeView] ? 'Unable to load view' : 'Loading view',
+      viewErrors[activeView] || 'Preparing this view…',
+      viewErrors[activeView] ? '!' : '…',
+    );
+  }
+
+  if (activeView === 'graph') return module.GraphView();
+  if (activeView === 'findings') return module.FindingsList(true);
+  if (activeView === 'serp') return module.SerpView();
 
   const entity = selectedEntity();
   if (!entity) {
@@ -40,7 +90,7 @@ function Detail() {
     );
   }
 
-  if (store.activeView === 'raw') return RawView(entity);
+  if (activeView === 'raw') return module.RawView(entity);
   return TreeView(entity, entityIdIndex());
 }
 
@@ -64,9 +114,9 @@ export const PanelApp = () => {
               {
                 type: 'button',
                 class: () => `tab ${store.activeView === id ? 'active' : ''}`,
-                onclick: () => {
-                  store.activeView = id;
-                },
+                onclick: () => activateView(id),
+                onmouseenter: () => { void loadView(id); },
+                onfocus: () => { void loadView(id); },
               },
               label,
               () => {

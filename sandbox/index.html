@@ -121,10 +121,12 @@
   <!-- Mount Sandbox App -->
   <script type="module">
     import { mountPanel } from '/ui/app.js';
+    import { configureSandboxActions } from '/ui/sandbox-actions.js';
     import { store, actions } from '/ui/store.js';
     import { FIXTURES } from '/sandbox/fixtures.js';
 
     const engine = globalThis.SchemaDT || {};
+    configureSandboxActions();
 
     function loadFixture(key) {
       const fixture = FIXTURES[key] || FIXTURES['e-commerce'];

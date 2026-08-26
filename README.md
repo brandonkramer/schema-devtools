@@ -77,6 +77,20 @@ npm run compare
 npm test
 ```
 
+### Build the Store Artifact
+```bash
+# Minifies the classic engine, bundles shared UI chunks, and writes dist/
+npm run build
+
+# Verifies source/distribution parity across every fixture
+npm run test:dist
+
+# Creates build/schema-devtools-<version>.zip and enforces size budgets
+npm run package
+```
+
+Development remains zero-build. Only the Chrome Web Store artifact is compiled; source files, tests, agent instructions, and sandbox fixtures are excluded from the ZIP.
+
 ---
 
 ## 🤖 AI Agents & MCP (Model Context Protocol)

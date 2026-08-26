@@ -4,6 +4,7 @@
 import { actions, selectedEntity, store } from '../ui/store.js';
 import { mountPanel } from '../ui/app.js';
 import { formatEvalException, listen } from './host.js';
+import { PAGE_WATCH_INSTALL, PAGE_WATCH_REMOVE } from './page-sources.js';
 
 const engine = globalThis.SchemaDT || {};
 const EXTRACT_SOURCE = engine.EXTRACT_SOURCE;
@@ -29,118 +30,6 @@ let watchTimer = 0;
 let analyzing = false;
 let panelVisible = true;
 const HIGHLIGHT_TOKEN = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-
-const PAGE_WATCH_INSTALL = `(() => {
-  const KEY = Symbol.for('schema-devtools.watch');
-  if (window[KEY] && window[KEY].installed) return window[KEY].generation;
-  const state = { installed: true, generation: 1, timer: 0 };
-  window[KEY] = state;
-  const bump = () => {
-    if (state.timer) return;
-    state.timer = setTimeout(() => {
-      state.timer = 0;
-      if (window[KEY] !== state) return;
-      state.generation += 1;
-    }, 250);
-  };
-  const isOverlay = (node) => {
-    if (!node || node.nodeType !== 1) return false;
-    return node.getAttribute('data-schema-devtools') === 'overlay';
-  };
-  const interesting = (node) => {
-    if (!node || node.nodeType !== 1) return false;
-    if (isOverlay(node)) return false;
-    const el = node;
-    if (el.tagName === 'SCRIPT') {
-      const type = (el.getAttribute('type') || '').split(';', 1)[0].trim().toLowerCase();
-      return type === 'application/ld+json';
-    }
-    return el.hasAttribute('itemscope') || el.hasAttribute('itemtype') || el.hasAttribute('itemprop')
-      || el.hasAttribute('itemref') || el.hasAttribute('typeof') || el.hasAttribute('property') || el.hasAttribute('vocab')
-      || (el.hasAttribute('rel') && Boolean(el.closest('[typeof], [vocab], [prefix]')));
-  };
-  const containsInteresting = (node) => {
-    if (interesting(node)) return true;
-    if (!node || node.nodeType !== 1) return false;
-    for (const match of node.querySelectorAll(
-      'script[type], [itemscope], [itemtype], [itemprop], [itemref], [typeof], [property], [vocab], [prefix], [rel]'
-    )) {
-      if (interesting(match)) return true;
-    }
-    return false;
-  };
-  const target = document.documentElement || document;
-  if (target) {
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (isOverlay(m.target)) continue;
-        if (m.type === 'characterData') {
-          const host = m.target.parentElement;
-          if (host && (host.tagName === 'SCRIPT' || interesting(host))) { bump(); return; }
-          continue;
-        }
-        if (m.type === 'attributes' && m.oldValue !== null) {
-          const name = m.attributeName;
-          const oldType = name === 'type' && String(m.oldValue).split(';', 1)[0].trim().toLowerCase();
-          if (
-            oldType === 'application/ld+json' ||
-            ['itemscope', 'itemtype', 'itemprop', 'itemref', 'typeof', 'property', 'vocab', 'prefix', 'rel'].includes(name)
-          ) { bump(); return; }
-        }
-        if (interesting(m.target)) { bump(); return; }
-        for (const n of m.addedNodes) { if (containsInteresting(n)) { bump(); return; } }
-        for (const n of m.removedNodes) { if (containsInteresting(n)) { bump(); return; } }
-      }
-    });
-    observer.observe(target, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeOldValue: true,
-      attributeFilter: [
-        'type', 'itemscope', 'itemtype', 'itemprop', 'itemref', 'typeof', 'property', 'vocab',
-        'content', 'href', 'src', 'data', 'datetime', 'itemid', 'resource', 'about', 'prefix', 'rel',
-      ],
-    });
-    state.observer = observer;
-  }
-  const wrap = (fn) => function wrapped() {
-    const result = fn.apply(this, arguments);
-    bump();
-    return result;
-  };
-  try {
-    state.originalPushState = history.pushState;
-    state.originalReplaceState = history.replaceState;
-    state.wrappedPushState = wrap(history.pushState);
-    state.wrappedReplaceState = wrap(history.replaceState);
-    history.pushState = state.wrappedPushState;
-    history.replaceState = state.wrappedReplaceState;
-  } catch (e) {}
-  window.addEventListener('popstate', bump);
-  window.addEventListener('hashchange', bump);
-  state.bump = bump;
-  return state.generation;
-})()`;
-
-const PAGE_WATCH_REMOVE = `(() => {
-  const KEY = Symbol.for('schema-devtools.watch');
-  const state = window[KEY];
-  if (!state) return false;
-  try { state.observer && state.observer.disconnect(); } catch (e) {}
-  if (state.timer) clearTimeout(state.timer);
-  if (state.bump) {
-    window.removeEventListener('popstate', state.bump);
-    window.removeEventListener('hashchange', state.bump);
-  }
-  try {
-    if (history.pushState === state.wrappedPushState) history.pushState = state.originalPushState;
-    if (history.replaceState === state.wrappedReplaceState) history.replaceState = state.originalReplaceState;
-  } catch (e) {}
-  delete window[KEY];
-  return true;
-})()`;
 
 function applyTheme(theme = chrome.devtools?.panels?.themeName) {
   const name = theme === 'dark' ? 'dark' : 'default';

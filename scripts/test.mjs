@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 
 import { EXTRACT_SOURCE } from '../src/extract.js';
+import { SELECTION_EXTRACT_SOURCE } from '../src/extract-selection.js';
 import { normalize } from '../src/normalize.js';
 import { validate } from '../src/validate.js';
 import { score } from '../src/score.js';
@@ -11,7 +12,9 @@ import { RICH_RESULT_RULES } from '../src/catalog/rich-results.js';
 import { DEPRECATED_TYPES, FAQ_GOOGLE_STATUS } from '../src/catalog/deprecations.js';
 import { matchRuleInCatalog, hasProperty, hasPropertyPath, isIso8601Date, isIso4217Currency } from '../src/catalog/syntax.js';
 import { formatEvalException, listen } from '../devtools/host.js';
-import { matchesSearch, serpCards, store, visibleEntities } from '../ui/store.js';
+import { PAGE_WATCH_INSTALL } from '../devtools/page-sources.js';
+import { serpCards } from '../ui/features/serp.js';
+import { matchesSearch, store, visibleEntities } from '../ui/store.js';
 import { FIXTURES } from '../sandbox/fixtures.js';
 
 const root = new URL('../', import.meta.url);
@@ -24,6 +27,7 @@ console.log('🧪 Running Full Schema DevTools Verification Suite...\n');
 process.stdout.write('⏳ 1. Bundling Schema Engine... ');
 const files = [
   'src/extract.js',
+  'src/extract-selection.js',
   'src/catalog/rich-results.js',
   'src/catalog/deprecations.js',
   'src/catalog/syntax.js',
@@ -57,6 +61,8 @@ ${body}
 global.SchemaDT = {
   extractPageSchema,
   EXTRACT_SOURCE,
+  inspectSelectedSchemaNode,
+  SELECTION_EXTRACT_SOURCE,
   normalize,
   stripSchemaPrefix,
   validate,
@@ -75,6 +81,8 @@ const sandbox = {};
 vm.runInNewContext(bundleSource, sandbox);
 assert.equal(typeof sandbox.SchemaDT?.validate, 'function', 'Bundled SchemaDT.validate must be a function.');
 assert.equal(typeof sandbox.SchemaDT?.score, 'function', 'Bundled SchemaDT.score must be a function.');
+assert.equal(typeof sandbox.SchemaDT?.SELECTION_EXTRACT_SOURCE, 'string', 'Bundle must expose selected-node extraction source.');
+assert.equal(typeof SELECTION_EXTRACT_SOURCE, 'string', 'Selected-node extraction source must be serializable.');
 console.log(`✅ Passed (${bundleSource.length} bytes)`);
 
 // -----------------------------------------------------------------------------
@@ -457,23 +465,14 @@ assert(!('permissions' in manifest) || manifest.permissions.length === 0);
 
 // Panel Host Source Checks
 const panelSource = readFileSync(new URL('devtools/panel.js', root), 'utf8');
+const pageSources = readFileSync(new URL('devtools/page-sources.js', root), 'utf8');
 assert(panelSource.includes('setThemeChangeHandler'));
 assert(!panelSource.includes('panels.onThemeChanged'));
 assert(!panelSource.includes('window.__SCHEMA_DEVTOOLS__ ='));
 assert(panelSource.includes('PAGE_WATCH_REMOVE'));
-assert(panelSource.includes('containsInteresting'));
-assert(panelSource.includes("Symbol.for('schema-devtools.watch')"));
-assert(panelSource.includes('attributeOldValue: true'));
-
-function readTemplateConstant(source, name) {
-  const startMarker = `const ${name} = \``;
-  const start = source.indexOf(startMarker);
-  assert(start >= 0, `${name} template must exist`);
-  const bodyStart = start + startMarker.length;
-  const end = source.indexOf('`;', bodyStart);
-  assert(end >= 0, `${name} template must terminate`);
-  return source.slice(bodyStart, end);
-}
+assert(pageSources.includes('containsInteresting'));
+assert(pageSources.includes("Symbol.for('schema-devtools.watch')"));
+assert(pageSources.includes('attributeOldValue: true'));
 
 let watchObserver;
 const watchTimers = [];
@@ -504,7 +503,7 @@ const watchHistory = {
   pushState() {},
   replaceState() {},
 };
-vm.runInNewContext(readTemplateConstant(panelSource, 'PAGE_WATCH_INSTALL'), {
+vm.runInNewContext(PAGE_WATCH_INSTALL, {
   window: watchWindow,
   document: { documentElement: watchRoot },
   history: watchHistory,
@@ -614,6 +613,7 @@ process.stdout.write('⏳ 4. VanJS Panel & Sidebar UI Checks... ');
 
 const panelJs = readFileSync(new URL('devtools/panel.js', root), 'utf8');
 const panelApp = readFileSync(new URL('ui/app.js', root), 'utf8');
+const coreStore = readFileSync(new URL('ui/store.js', root), 'utf8');
 const toolbarJs = readFileSync(new URL('ui/components/toolbar.js', root), 'utf8');
 const entityListJs = readFileSync(new URL('ui/components/entity-list.js', root), 'utf8');
 const panelHtml = readFileSync(new URL('devtools/panel.html', root), 'utf8');
@@ -622,6 +622,7 @@ const vanJs = readFileSync(new URL('vendor/van.js', root), 'utf8');
 const vanXJs = readFileSync(new URL('vendor/van-x.js', root), 'utf8');
 
 const sidebarHostJs = readFileSync(new URL('devtools/sidebar.js', root), 'utf8');
+const selectionExtractJs = readFileSync(new URL('src/extract-selection.js', root), 'utf8');
 const sidebarHtml = readFileSync(new URL('devtools/sidebar.html', root), 'utf8');
 const sidebarViewJs = readFileSync(new URL('ui/sidebar-view.js', root), 'utf8');
 
@@ -629,11 +630,16 @@ assert.match(panelHtml, /type="module" src="panel.js"/, 'Panel must load as an E
 assert.match(panelHtml, /href="\.\.\/ui\/panel\.css"/, 'Panel HTML must link ../ui/panel.css.');
 assert.match(sidebarHtml, /href="\.\.\/ui\/sidebar\.css"/, 'Sidebar HTML must link ../ui/sidebar.css.');
 assert.match(sidebarHostJs, /from '\.\.\/ui\/sidebar-view\.js'/, 'Sidebar host must import ../ui/sidebar-view.js.');
-assert.match(sidebarHostJs, /hasRdfaRelation/, 'Sidebar RDFa source indexing must match nested relation extraction.');
+assert.match(selectionExtractJs, /hasRdfaRelation/, 'Sidebar RDFa source indexing must match nested relation extraction.');
+assert.match(sidebarHostJs, /engine\.SELECTION_EXTRACT_SOURCE/, 'Sidebar must use the shared selected-node extraction source.');
 assert.match(sidebarHostJs, /candidate\.types\.some/, 'Sidebar must prefer properties from the normalized selected entity.');
 assert.match(sidebarHostJs, /ensureFindings\(true\)/, 'Sidebar selections must refresh findings after page mutations.');
 assert.match(panelApp, /from '\.\.\/vendor\/van\.js'/, 'Panel UI must use the vendored VanJS runtime.');
 assert.match(panelApp, /van\.tags/, 'Panel UI must use VanJS tag functions.');
+assert.match(panelApp, /import\('\.\/views\/lazy\.js'\)/, 'Optional panel views must load through a dynamic import.');
+assert.doesNotMatch(panelApp, /from '\.\/views\/(?:raw|graph|findings|serp)\.js'/, 'Optional views must not be eager imports.');
+assert.doesNotMatch(coreStore, /function serpCards/, 'SERP generation must stay out of the eager core store.');
+assert.doesNotMatch(coreStore, /function buildEntityGraph/, 'Graph generation must stay out of the eager core store.');
 assert.match(sidebarViewJs, /van\.tags/, 'Sidebar view must use VanJS tag functions.');
 assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel components must not assign innerHTML.');
 assert.doesNotMatch(sidebarViewJs, /\.innerHTML/, 'Sidebar view must not assign innerHTML.');

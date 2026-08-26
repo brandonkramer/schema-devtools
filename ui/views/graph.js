@@ -1,5 +1,6 @@
 import van from '../../vendor/van.js';
-import { actions, buildEntityGraph, entityLabel, store } from '../store.js';
+import { buildEntityGraph } from '../features/graph.js';
+import { actions, entityLabel, store } from '../store.js';
 
 const { div, span, p, button, strong } = van.tags;
 

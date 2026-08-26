@@ -3,238 +3,12 @@ import { formatEvalException, listen } from './host.js';
 
 const engine = globalThis.SchemaDT || {};
 const EXTRACT_SOURCE = engine.EXTRACT_SOURCE;
+const SELECTION_EXTRACT_SOURCE = engine.SELECTION_EXTRACT_SOURCE;
 const normalize = engine.normalize;
 const validate = engine.validate;
 
 /** @typedef {import('../src/types.js').PageSnapshot} PageSnapshot */
 /** @typedef {import('../src/types.js').Finding} Finding */
-
-const SIDEBAR_INSPECT_SOURCE = `(() => { try { return JSON.stringify((${function sidebarInspect() {
-  const el = typeof $0 !== 'undefined' ? $0 : null;
-  if (!el) return { empty: true };
-
-  const isJsonLd = isJsonLdScript(el);
-
-  if (isJsonLd) {
-    const raw = el.textContent || '';
-    let parsed = null;
-    let parseError = null;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      parseError = { message: e instanceof Error ? e.message : String(e) };
-    }
-    const scripts = Array.from(document.querySelectorAll('script[type]')).filter(isJsonLdScript);
-    const domIndex = scripts.indexOf(el);
-    return {
-      empty: false,
-      format: 'jsonld',
-      types: extractTypes(parsed),
-      properties: extractKeyProperties(parsed),
-      selector:
-        domIndex >= 0
-          ? 'jsonld:' + domIndex
-          : buildSelector(el),
-      domIndex,
-      sourceIndex: domIndex,
-      raw,
-      parsed,
-      parseError,
-    };
-  }
-
-  const scope = el.hasAttribute('itemscope') ? el : el.closest('[itemscope]');
-  if (scope) {
-    const type = scope.getAttribute('itemtype') || '';
-    const types = type ? [stripSchemaOrg(type, scope)] : ['Thing'];
-    const properties = {};
-    const propNodes = Array.from(scope.querySelectorAll('[itemprop]'));
-    for (const id of (scope.getAttribute('itemref') || '').split(/\s+/).filter(Boolean)) {
-      const ref = document.getElementById(id);
-      if (!ref) continue;
-      if (ref.hasAttribute('itemprop')) propNodes.push(ref);
-      propNodes.push(...ref.querySelectorAll('[itemprop]'));
-    }
-    new Set(propNodes).forEach((node) => {
-      const names = (node.getAttribute('itemprop') || '').split(/\s+/).filter(Boolean);
-      const value =
-        node.getAttribute('content') ||
-        node.getAttribute('href') ||
-        node.getAttribute('src') ||
-        node.getAttribute('datetime') ||
-        node.getAttribute('data') ||
-        node.textContent?.trim().slice(0, 120) ||
-        '';
-      for (const name of names) {
-        if (!(name in properties)) properties[name] = value;
-      }
-    });
-    let sourceScope = scope;
-    while (sourceScope.hasAttribute('itemprop')) {
-      const parentScope = sourceScope.parentElement?.closest('[itemscope]');
-      if (!parentScope) break;
-      sourceScope = parentScope;
-    }
-    const topScopes = Array.from(document.querySelectorAll('[itemscope]'))
-      .filter((node) => !node.hasAttribute('itemprop'));
-    return {
-      empty: false,
-      format: 'microdata',
-      types,
-      properties,
-      selector: buildSelector(scope),
-      sourceIndex: topScopes.indexOf(sourceScope),
-    };
-  }
-
-  const rdfaRoot = el.hasAttribute('typeof')
-    ? el
-    : el.closest('[typeof]') || (el.hasAttribute('property') ? el : el.closest('[property]'));
-  if (rdfaRoot) {
-    const typeofAttr = rdfaRoot.getAttribute('typeof') || '';
-    const types = typeofAttr
-      ? typeofAttr.split(/\s+/).map((type) => stripSchemaOrg(type, rdfaRoot)).filter(Boolean)
-      : ['Thing'];
-    const properties = {};
-    const propNodes = rdfaRoot.querySelectorAll('[property], [rel]');
-    propNodes.forEach((node) => {
-      const names = (node.getAttribute('property') || node.getAttribute('rel') || '')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((name) => stripSchemaOrg(name, node));
-      const value =
-        node.getAttribute('content') ||
-        node.getAttribute('resource') ||
-        node.getAttribute('href') ||
-        node.textContent?.trim().slice(0, 120) ||
-        '';
-      for (const name of names) {
-        if (!(name in properties)) properties[name] = value;
-      }
-    });
-    let sourceRoot = rdfaRoot;
-    while (true) {
-      const parentType = sourceRoot.parentElement?.closest('[typeof]');
-      if (!parentType || !hasRdfaRelation(sourceRoot, parentType)) break;
-      sourceRoot = parentType;
-    }
-    const topTypes = Array.from(document.querySelectorAll('[typeof]')).filter((node) => {
-      const parentType = node.parentElement?.closest('[typeof]');
-      return !parentType || !hasRdfaRelation(node, parentType);
-    });
-    return {
-      empty: false,
-      format: 'rdfa',
-      types,
-      properties,
-      selector: buildSelector(rdfaRoot),
-      sourceIndex: topTypes.indexOf(sourceRoot),
-    };
-  }
-
-  return { empty: true };
-
-  function stripSchemaOrg(value, node) {
-    const direct = value.match(/^(?:https?:\/\/schema\.org\/|schema:)(.+)$/i);
-    if (direct) return direct[1];
-    const compact = value.match(/^([^:]+):(.+)$/);
-    if (!compact || !node) return value;
-    const prefixAttr = node.closest('[prefix]')?.getAttribute('prefix') || '';
-    for (const declaration of prefixAttr.matchAll(/(?:^|\s)([A-Za-z][\w.-]*):\s+(\S+)/g)) {
-      if (declaration[1] === compact[1] && /^https?:\/\/schema\.org\/?$/i.test(declaration[2])) {
-        return compact[2];
-      }
-    }
-    return value;
-  }
-
-  function hasRdfaRelation(node, parentType) {
-    let current = node;
-    while (current && current !== parentType) {
-      if (current.hasAttribute('property') || current.hasAttribute('rel')) return true;
-      current = current.parentElement;
-    }
-    return false;
-  }
-
-  function isJsonLdScript(node) {
-    if (node.tagName !== 'SCRIPT') return false;
-    const type = (node.getAttribute('type') || '').split(';', 1)[0].trim().toLowerCase();
-    return type === 'application/ld+json';
-  }
-
-  function extractTypes(data) {
-    if (!data || typeof data !== 'object') return [];
-    if (Array.isArray(data)) {
-      return data.flatMap(extractTypes);
-    }
-    const graph = /** @type {Record<string, unknown>} */ (data)['@graph'];
-    const t = /** @type {Record<string, unknown>} */ (data)['@type'];
-    const own = t
-      ? (Array.isArray(t) ? t : [t]).map((x) => stripSchemaOrg(String(x)))
-      : [];
-    return graph === undefined ? own : own.concat(extractTypes(graph));
-  }
-
-  function extractKeyProperties(data) {
-    const props = {};
-    if (!data || typeof data !== 'object') return props;
-    const items = collectObjects(data);
-    const priority = [
-      'name',
-      'headline',
-      'description',
-      'url',
-      'image',
-      'datePublished',
-      'author',
-      'offers',
-      'brand',
-    ];
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
-      for (const key of priority) {
-        if (key in /** @type {Record<string, unknown>} */ (item) && !(key in props)) {
-          props[key] = summarize(/** @type {Record<string, unknown>} */ (item)[key]);
-        }
-      }
-    }
-    return props;
-
-    function collectObjects(value) {
-      if (!value || typeof value !== 'object') return [];
-      if (Array.isArray(value)) return value.flatMap(collectObjects);
-      const object = /** @type {Record<string, unknown>} */ (value);
-      const graphItems = object['@graph'] === undefined ? [] : collectObjects(object['@graph']);
-      return [object, ...graphItems];
-    }
-  }
-
-  function summarize(value) {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      return String(value).slice(0, 120);
-    }
-    if (Array.isArray(value)) return summarize(value[0]);
-    if (typeof value === 'object') {
-      const obj = /** @type {Record<string, unknown>} */ (value);
-      if ('name' in obj) return summarize(obj.name);
-      if ('@id' in obj) return summarize(obj['@id']);
-      return JSON.stringify(value).slice(0, 120);
-    }
-    return String(value);
-  }
-
-  function buildSelector(node) {
-    if (node.id) return '#' + CSS.escape(node.id);
-    const tag = node.tagName.toLowerCase();
-    const parent = node.parentElement;
-    if (!parent) return tag;
-    const siblings = Array.from(parent.children).filter((c) => c.tagName === node.tagName);
-    const idx = siblings.indexOf(node) + 1;
-    return tag + ':nth-of-type(' + idx + ')';
-  }
-}.toString()})()); } catch (e) { return JSON.stringify({ empty: true, error: String(e && e.message ? e.message : e) }); } })()`;
 
 /** @type {PageSnapshot | null} */
 let lastSnapshot = null;
@@ -393,7 +167,7 @@ async function ensureFindings(refresh = false) {
 async function onSelectionChanged() {
   const run = ++selectionRun;
   try {
-    const raw = await evalInPage(SIDEBAR_INSPECT_SOURCE);
+    const raw = await evalInPage(SELECTION_EXTRACT_SOURCE);
     if (run !== selectionRun) return;
     if (typeof raw !== 'string') throw new Error('Selection inspect did not return a JSON string.');
     const nodeInfo = /** @type {Record<string, unknown>} */ (JSON.parse(raw));
@@ -418,7 +192,7 @@ async function onSelectionChanged() {
 function init() {
   applyTheme();
   mountSidebar(document.getElementById('app'));
-  if (!EXTRACT_SOURCE || typeof normalize !== 'function' || typeof validate !== 'function') {
+  if (!EXTRACT_SOURCE || !SELECTION_EXTRACT_SOURCE || typeof normalize !== 'function' || typeof validate !== 'function') {
     showEmpty('Schema engine failed to load. Reload the extension and reopen DevTools.');
     return;
   }
