@@ -38,7 +38,7 @@ export const SidebarApp = () => {
           dl(
             { class: 'props' },
             () =>
-              store.properties.map((prop) => [
+              store.properties.flatMap((prop) => [
                 dt(prop.key),
                 dd({ title: prop.value }, prop.value),
               ]),
