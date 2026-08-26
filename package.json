@@ -9,7 +9,8 @@
     "test": "node scripts/test.mjs",
     "validate": "node scripts/validate-cli.mjs",
     "bundle": "node scripts/bundle-engine.mjs",
-    "audit:rules": "node scripts/audit-rules.mjs"
+    "audit:rules": "node scripts/audit-rules.mjs",
+    "compare:smv": "node scripts/compare-smv.mjs"
   },
   "dependencies": {
     "vanjs-core": "1.6.1",
