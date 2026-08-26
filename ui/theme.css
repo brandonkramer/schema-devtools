@@ -1,53 +1,91 @@
 /* Chrome DevTools system colors (default + dark). themeName is "default" | "dark". */
 :root {
-  --sys-color-base: #fff;
+  --sys-color-base: #ffffff;
   --sys-color-base-container: #f1f3f4;
   --sys-color-tonal-container: #e8eaed;
-  --sys-color-state-hover-on-subtle: rgb(0 0 0 / 6%);
+  --sys-color-state-hover-on-subtle: rgb(0 0 0 / 5%);
   --sys-color-state-ripple-neutral-on-subtle: rgb(0 0 0 / 10%);
-  --sys-color-divider: #d0d0d0;
-  --sys-color-on-surface: #1f1f1f;
+  --sys-color-divider: #e0e0e0;
+  --sys-color-on-surface: #202124;
   --sys-color-on-surface-subtle: #5f6368;
-  --sys-color-primary: #0b57d0;
+  --sys-color-primary: #1a73e8;
   --sys-color-tonal-outline: #747775;
-  --color-error: #c5221f;
-  --color-warning: #b06000;
-  --color-info: #0b57d0;
+  
+  --color-error: #d93025;
+  --color-warning: #e37400;
+  --color-info: #1a73e8;
+  --color-success: #1e8e3e;
+  
   --lighthouse-pass: #0cce6b;
   --lighthouse-average: #ffa400;
   --lighthouse-fail: #ff4e42;
+  
   --score-excellent: #0cce6b;
-  --score-good: #0b57d0;
+  --score-good: #1a73e8;
   --score-fair: #ffa400;
   --score-poor: #ff4e42;
-  --score-none: #5f6368;
+  --score-none: #70757a;
+  
+  --dt-key: #881391;
+  --dt-string: #c41a16;
+  --dt-number: #1c00cf;
+  --dt-boolean: #0d22aa;
+  --dt-null: #808080;
+  --dt-link: #1a73e8;
+  --dt-link-bg: rgba(26, 115, 232, 0.08);
+  --dt-tree-guide: rgba(0, 0, 0, 0.1);
+  --dt-selection-bg: rgba(26, 115, 232, 0.12);
+  --dt-selection-border: #1a73e8;
+
   --serp-cite: #006621;
   --serp-title: #1a0dab;
+  
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --toolbar-height: 26px;
-  --radius: 4px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --toolbar-height: 28px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-pill: 9999px;
 }
 
 :root[data-theme="dark"] {
-  --sys-color-base: #1f1f1f;
+  --sys-color-base: #202124;
   --sys-color-base-container: #292a2d;
   --sys-color-tonal-container: #35363a;
-  --sys-color-state-hover-on-subtle: rgb(255 255 255 / 8%);
-  --sys-color-state-ripple-neutral-on-subtle: rgb(255 255 255 / 12%);
+  --sys-color-state-hover-on-subtle: rgb(255 255 255 / 6%);
+  --sys-color-state-ripple-neutral-on-subtle: rgb(255 255 255 / 10%);
   --sys-color-divider: #3c4043;
-  --sys-color-on-surface: #e3e3e3;
+  --sys-color-on-surface: #e8eaed;
   --sys-color-on-surface-subtle: #9aa0a6;
   --sys-color-primary: #8ab4f8;
   --sys-color-tonal-outline: #8e918f;
+  
   --color-error: #f28b82;
   --color-warning: #fdd663;
   --color-info: #8ab4f8;
+  --color-success: #81c995;
+  
+  --lighthouse-pass: #0cce6b;
+  --lighthouse-average: #ffa400;
+  --lighthouse-fail: #ff4e42;
+  
   --score-excellent: #0cce6b;
   --score-good: #8ab4f8;
   --score-fair: #ffa400;
   --score-poor: #ff4e42;
   --score-none: #9aa0a6;
+  
+  --dt-key: #5db0d7;
+  --dt-string: #ce9178;
+  --dt-number: #b5cea8;
+  --dt-boolean: #569cd6;
+  --dt-null: #808080;
+  --dt-link: #8ab4f8;
+  --dt-link-bg: rgba(138, 180, 248, 0.12);
+  --dt-tree-guide: rgba(255, 255, 255, 0.12);
+  --dt-selection-bg: rgba(138, 180, 248, 0.15);
+  --dt-selection-border: #8ab4f8;
+
   --serp-cite: #81c995;
   --serp-title: #8ab4f8;
 }
@@ -71,6 +109,7 @@ body {
   line-height: 1.4;
   color: var(--sys-color-on-surface);
   background: var(--sys-color-base);
+  user-select: none;
 }
 
 button,

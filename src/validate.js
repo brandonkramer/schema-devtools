@@ -433,11 +433,11 @@ function validateEntity(entity) {
     if (types.includes(dep)) {
       pushFinding(findings, {
         severity: 'info',
-        code: 'HOWTO_GOOGLE_UNSUPPORTED',
-        message: 'HowTo structured data is no longer supported as a Google rich result.',
+        code: `${dep.toUpperCase()}_GOOGLE_UNSUPPORTED`,
+        message: `${dep} structured data is no longer supported as a Google rich result.`,
         entityId: id,
         path: entity.path,
-        docsUrl: 'https://developers.google.com/search/blog/2023/08/howto-faq-changes',
+        docsUrl: 'https://developers.google.com/search/updates',
       });
     }
   }

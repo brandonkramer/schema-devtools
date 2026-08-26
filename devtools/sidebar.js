@@ -246,6 +246,10 @@ function applyTheme(theme = chrome.devtools?.panels?.themeName) {
  */
 function evalInPage(source) {
   return new Promise((resolve, reject) => {
+    if (!chrome.devtools?.inspectedWindow?.eval) {
+      reject(new Error('DevTools inspectedWindow is unavailable.'));
+      return;
+    }
     chrome.devtools.inspectedWindow.eval(source, (result, exceptionInfo) => {
       if (exceptionInfo && Object.keys(exceptionInfo).length > 0) {
         reject(new Error(formatEvalException(exceptionInfo)));
@@ -338,7 +342,10 @@ async function ensureFindings() {
   } catch (err) {
     lastFindings = [];
     lastEntities = [];
-    console.error('Schema sidebar analysis failed', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('has no execution context') && !msg.includes('Inspected tab was closed')) {
+      console.warn('Schema sidebar analysis note:', msg);
+    }
   }
 }
 
@@ -357,7 +364,12 @@ async function onSelectionChanged() {
     if (run !== selectionRun) return;
     showContent(nodeInfo);
   } catch (err) {
-    console.error('Schema sidebar selection failed', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('has no execution context') || msg.includes('Inspected tab was closed') || msg.includes('Cannot access contents of url')) {
+      // Expected transient state during page navigation
+      showEmpty('Select an element with schema markup');
+      return;
+    }
     showEmpty(err instanceof Error ? err.message : 'Unable to inspect this node');
   }
 }
@@ -369,8 +381,8 @@ function init() {
     showEmpty('Schema engine failed to load. Reload the extension and reopen DevTools.');
     return;
   }
-  chrome.devtools.panels.setThemeChangeHandler?.(applyTheme);
-  listen(chrome.devtools.panels.elements?.onSelectionChanged, () => {
+  chrome.devtools?.panels?.setThemeChangeHandler?.(applyTheme);
+  listen(chrome.devtools?.panels?.elements?.onSelectionChanged, () => {
     onSelectionChanged();
   });
   listen(chrome.devtools.network?.onNavigated, () => {

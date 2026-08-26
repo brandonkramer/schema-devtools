@@ -5,7 +5,7 @@ import { reactive } from '../vendor/arrow.js';
 export const store = reactive({
   theme: 'default',
   query: '',
-  activeView: /** @type {'tree' | 'raw' | 'findings' | 'serp'} */ ('tree'),
+  activeView: /** @type {'tree' | 'raw' | 'findings' | 'serp' | 'graph'} */ ('tree'),
   status: '',
   statusError: false,
   fatal: '',
@@ -16,6 +16,18 @@ export const store = reactive({
   score: /** @type {{ total: number, label: string, errorCount: number, warningCount: number } | null} */ (null),
   snapshotUrl: '',
   snapshotCanonical: '',
+  collapsedPaths: /** @type {Record<string, boolean>} */ ({}),
+  exportMenuOpen: false,
+  sandboxOpen: false,
+  sandboxText: '',
+  sandboxEntityId: /** @type {string | null} */ (null),
+  sandboxStatus: /** @type {{ valid: boolean, message: string, score: number | null, errorCount: number, warningCount: number }} */ ({
+    valid: true,
+    message: 'Ready for editing',
+    score: null,
+    errorCount: 0,
+    warningCount: 0,
+  }),
 });
 
 export const actions = {
@@ -28,8 +40,62 @@ export const actions = {
   downloadJson: () => {},
   copyBundle: () => {},
   copyMarkdown: () => {},
+  copyAiPrompt: () => {},
   openRichResults: () => {},
   openSchemaValidator: () => {},
+  toggleCollapse: (path) => {
+    store.collapsedPaths[path] = !store.collapsedPaths[path];
+  },
+  toggleExportMenu: () => {
+    store.exportMenuOpen = !store.exportMenuOpen;
+  },
+  closeExportMenu: () => {
+    store.exportMenuOpen = false;
+  },
+  openSandbox: (entity) => {
+    store.sandboxOpen = true;
+    store.sandboxEntityId = entity.id;
+    store.sandboxText = JSON.stringify(entity.data, null, 2);
+    actions.validateSandbox();
+  },
+  closeSandbox: () => {
+    store.sandboxOpen = false;
+  },
+  resetSandbox: (entity) => {
+    store.sandboxText = JSON.stringify(entity.data, null, 2);
+    actions.validateSandbox();
+  },
+  validateSandbox: () => {
+    try {
+      const parsed = JSON.parse(store.sandboxText);
+      const entity = selectedEntity();
+      if (!entity) return;
+      const engine = globalThis.SchemaDT || {};
+      if (typeof engine.validate === 'function' && typeof engine.score === 'function') {
+        const dummySnapshot = { url: store.snapshotUrl, canonical: store.snapshotCanonical, jsonld: [], microdata: [], rdfa: [] };
+        const testEntity = { ...entity, data: parsed };
+        const testFindings = engine.validate(dummySnapshot, [testEntity]);
+        const testScore = engine.score(testFindings, [testEntity]);
+        store.sandboxStatus = {
+          valid: true,
+          message: `Valid JSON-LD · Quality Score ${testScore.total}/100`,
+          score: testScore.total,
+          errorCount: testScore.errorCount,
+          warningCount: testScore.warningCount,
+        };
+      } else {
+        store.sandboxStatus = { valid: true, message: 'Valid JSON syntax', score: null, errorCount: 0, warningCount: 0 };
+      }
+    } catch (e) {
+      store.sandboxStatus = {
+        valid: false,
+        message: e instanceof Error ? e.message : 'Invalid JSON syntax',
+        score: null,
+        errorCount: 1,
+        warningCount: 0,
+      };
+    }
+  },
 };
 
 /**
@@ -48,7 +114,7 @@ export function visibleEntities() {
   const query = store.query.trim();
   if (!query) return store.entities;
   return store.entities.filter((entity) => {
-    const haystack = `${entity.types.join(' ')} ${entity.format} ${entity.id} ${JSON.stringify(entity.data)}`;
+    const haystack = `${entity.types.join(' ')} ${entity.format} ${entity.id} ${entityLabel(entity)} ${JSON.stringify(entity.data)}`;
     return matchesSearch(haystack, query);
   });
 }
@@ -106,8 +172,50 @@ export function readText(value) {
     const obj = /** @type {Record<string, unknown>} */ (value);
     if (typeof obj.name === 'string') return obj.name;
     if (typeof obj.headline === 'string') return obj.headline;
+    if (typeof obj.title === 'string') return obj.title;
     if (typeof obj.text === 'string') return obj.text;
     if (typeof obj['@value'] === 'string') return obj['@value'];
+  }
+  return '';
+}
+
+/**
+ * Extract a human-friendly primary label for an entity (headline, name, product title, filename).
+ * @param {{ id: string, types: string[], format: string, data: Record<string, unknown> }} entity
+ */
+export function entityLabel(entity) {
+  if (!entity || !entity.data) return '';
+  const d = entity.data;
+  const directName = readText(d.headline || d.name || d.title);
+  if (directName) return directName;
+
+  if (entity.types.includes('ImageObject')) {
+    const caption = readText(d.caption);
+    if (caption) return caption;
+    const url = readUrl(d.contentUrl || d.url);
+    if (url) {
+      try {
+        const path = new URL(url, 'https://example.com').pathname;
+        const filename = path.split('/').filter(Boolean).pop();
+        if (filename) return decodeURIComponent(filename);
+      } catch {}
+    }
+  }
+
+  if (entity.types.includes('BreadcrumbList')) {
+    const list = Array.isArray(d.itemListElement) ? d.itemListElement : [];
+    if (list.length) return `${list.length} item${list.length === 1 ? '' : 's'}`;
+  }
+
+  const atId = typeof d['@id'] === 'string' ? d['@id'] : '';
+  if (atId) {
+    if (atId.includes('#')) return `#${atId.split('#').pop()}`;
+    try {
+      const parsed = new URL(atId, 'https://example.com');
+      return parsed.pathname !== '/' ? parsed.pathname : parsed.hostname;
+    } catch {
+      return atId;
+    }
   }
   return '';
 }
@@ -155,7 +263,7 @@ export function serpCards() {
   const seen = new Set();
   for (const entity of store.entities) {
     const key = entity.types.find((type) =>
-      ['Product', 'Recipe', 'NewsArticle', 'Article', 'BlogPosting', 'BreadcrumbList', 'Event', 'JobPosting'].includes(type),
+      ['Product', 'Recipe', 'NewsArticle', 'Article', 'BlogPosting', 'BreadcrumbList', 'Event', 'JobPosting', 'ProfilePage'].includes(type),
     );
     if (!key || seen.has(`${key}:${entity.id}`)) continue;
     const card = serpCardFor(entity);
@@ -255,5 +363,129 @@ function serpCardFor(entity) {
       image,
     };
   }
+  if (types.includes('ProfilePage')) {
+    const main = data.mainEntity && typeof data.mainEntity === 'object' ? /** @type {Record<string, unknown>} */ (data.mainEntity) : {};
+    return {
+      entity,
+      kind: 'Profile',
+      cite,
+      title: readText(main.name || data.name) || 'Creator Profile',
+      snippet: readText(main.description || data.description).slice(0, 160),
+      meta: readText(main.jobTitle || main.alternateName),
+      image: safeHttpUrl(readUrl(main.image || data.image)),
+    };
+  }
+  if (types.some((t) => ['LocalBusiness', 'Restaurant', 'Store', 'FoodEstablishment', 'AutomotiveBusiness', 'FinancialService', 'LodgingBusiness'].includes(t))) {
+    const rating = readRating(data);
+    const bits = [];
+    if (rating) bits.push(`${starString(rating.value, rating.best)} ${rating.value}${rating.count ? ` (${rating.count})` : ''}`);
+    const price = readText(data.priceRange);
+    if (price) bits.push(price);
+    const addr = data.address && typeof data.address === 'object'
+      ? [readText(/** @type {Record<string, unknown>} */(data.address).streetAddress), readText(/** @type {Record<string, unknown>} */(data.address).addressLocality)].filter(Boolean).join(', ')
+      : readText(data.address);
+    if (addr) bits.push(addr);
+    const tel = readText(data.telephone);
+    if (tel) bits.push(tel);
+    return {
+      entity,
+      kind: 'LocalBusiness',
+      cite,
+      title: readText(data.name) || 'Local Business',
+      snippet: (readText(data.description) || addr || '').slice(0, 160),
+      meta: bits.join(' · '),
+      image,
+    };
+  }
   return null;
+}
+
+/**
+ * Build graph edges and relationship links across entities.
+ */
+export function buildEntityGraph() {
+  const idMap = entityIdIndex();
+  const edges = [];
+  const connectedIds = new Set();
+
+  const REL_PROPS = [
+    'author', 'publisher', 'creator', 'brand', 'itemReviewed', 'hasVariant',
+    'parentOrganization', 'subOrganization', 'provider', 'isPartOf', 'mainEntity',
+    'organizer', 'performer', 'about', 'subjectOf', 'location', 'seller',
+    'hiringOrganization', 'alumniOf', 'memberOf', 'worksFor', 'owns', 'knows',
+  ];
+
+  for (const source of store.entities) {
+    const data = source.data;
+    for (const prop of REL_PROPS) {
+      const val = data[prop];
+      if (!val) continue;
+      const targets = Array.isArray(val) ? val : [val];
+      for (const t of targets) {
+        const matched = refTarget(t, idMap);
+        if (matched && matched.id !== source.id) {
+          edges.push({
+            source,
+            target: matched,
+            relation: prop,
+          });
+          connectedIds.add(source.id);
+          connectedIds.add(matched.id);
+        }
+      }
+    }
+  }
+
+  const orphaned = store.entities.filter((e) => !connectedIds.has(e.id));
+  return {
+    nodes: store.entities,
+    edges,
+    orphaned,
+    connectedCount: connectedIds.size,
+  };
+}
+
+/**
+ * Evaluate Generative Engine Optimization (GEO) & AI-readiness metrics.
+ */
+export function geoReadiness() {
+  let sameAsCount = 0;
+  let explicitIdCount = 0;
+  let authorClarityCount = 0;
+  let totalArticles = 0;
+
+  for (const entity of store.entities) {
+    const data = entity.data;
+    if (typeof data['@id'] === 'string' && data['@id'].trim()) {
+      explicitIdCount++;
+    }
+    const sameAs = data.sameAs;
+    if (sameAs) {
+      const urls = Array.isArray(sameAs) ? sameAs : [sameAs];
+      sameAsCount += urls.filter((u) => typeof u === 'string' && u.startsWith('http')).length;
+    }
+    if (entity.types.some((t) => ['Article', 'NewsArticle', 'BlogPosting'].includes(t))) {
+      totalArticles++;
+      if (data.author && typeof data.author === 'object') authorClarityCount++;
+    }
+  }
+
+  const total = store.entities.length;
+  const idRatio = total > 0 ? explicitIdCount / total : 0;
+  const articleClarityRatio = totalArticles > 0 ? authorClarityCount / totalArticles : 1;
+
+  let geoScore = 50;
+  if (sameAsCount > 0) geoScore += Math.min(sameAsCount * 10, 20);
+  if (idRatio >= 0.5) geoScore += 15;
+  if (articleClarityRatio >= 0.8) geoScore += 15;
+
+  return {
+    geoScore: Math.min(geoScore, 100),
+    sameAsCount,
+    explicitIdCount,
+    totalEntities: total,
+    hasSameAs: sameAsCount > 0,
+    hasGoodIds: idRatio >= 0.5,
+    hasAuthorClarity: articleClarityRatio >= 0.8,
+  };
 }

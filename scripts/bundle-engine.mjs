@@ -10,6 +10,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const files = [
   'src/extract.js',
+  'src/catalog/rich-results.js',
+  'src/catalog/deprecations.js',
+  'src/catalog/syntax.js',
   'src/rules.js',
   'src/normalize.js',
   'src/validate.js',

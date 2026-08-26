@@ -419,12 +419,12 @@ const EXTRACT_SOURCE = `(() => {
 
 
 /**
- * Google rich-result and schema.org sanity rule catalog.
- * Based on public Google Search Central documentation.
+ * Google Rich-Result Rule Catalog.
+ * Declarative requirements and recommendations based on Google Search Central documentation.
  * @file
  */
 
-/** @typedef {import('./types.js').TypeRule} TypeRule */
+/** @typedef {import('../types.js').TypeRule} TypeRule */
 
 /** @type {TypeRule[]} */
 const RICH_RESULT_RULES = [
@@ -568,8 +568,15 @@ const RICH_RESULT_RULES = [
   },
 ];
 
+
+/**
+ * Google Search & Schema.org lifecycle deprecations.
+ * Tracks retired features to prevent false positive quality score penalties.
+ * @file
+ */
+
 /** Schema types whose Google rich-result feature is no longer supported. */
-const DEPRECATED_TYPES = ['HowTo'];
+const DEPRECATED_TYPES = ['HowTo', 'SpecialAnnouncement'];
 
 /** Current Google Search status for FAQPage markup. */
 const FAQ_GOOGLE_STATUS = {
@@ -579,19 +586,29 @@ const FAQ_GOOGLE_STATUS = {
   docsUrl: 'https://developers.google.com/search/updates#faq-deprecation',
 };
 
+
+/**
+ * Semantic property, ISO format, and syntax check helpers.
+ * @file
+ */
+
+/** @typedef {import('../types.js').TypeRule} TypeRule */
+
 /**
  * Find the best matching rule for an entity type list.
+ * @param {TypeRule[]} catalog
  * @param {string[]} types
  * @returns {TypeRule|null}
  */
-function matchRule(types) {
-  for (const rule of RICH_RESULT_RULES) {
+function matchRuleInCatalog(catalog, types) {
+  for (const rule of catalog) {
     if (types.includes(rule.type)) return rule;
   }
   return null;
 }
 
 /**
+ * Check if a property exists and contains non-empty value.
  * @param {Record<string, unknown>} data
  * @param {string} prop
  * @returns {boolean}
@@ -612,6 +629,7 @@ function hasProperty(data, prop) {
 }
 
 /**
+ * Check if a URL string is relative.
  * @param {unknown} val
  * @returns {boolean}
  */
@@ -625,16 +643,17 @@ function isRelativeUrl(val) {
   return !s.includes(':') || s.startsWith('/') || s.startsWith('#') || s.startsWith('?');
 }
 
+const URL_PROPS = new Set([
+  'url', 'image', 'logo', 'contentUrl', 'thumbnailUrl', 'embedUrl',
+  'sameAs', 'item', 'target', 'urlTemplate', 'mainEntityOfPage', '@id',
+]);
+
 /**
  * Collect URL-like string values from entity data.
  * @param {Record<string, unknown>} data
  * @returns {Array<{path: string, value: string}>}
  */
 function collectUrlFields(data) {
-  const urlProps = new Set([
-    'url', 'image', 'logo', 'contentUrl', 'thumbnailUrl', 'embedUrl',
-    'sameAs', 'item', 'target', 'urlTemplate', 'mainEntityOfPage', '@id',
-  ]);
   /** @type {Array<{path: string, value: string}>} */
   const found = [];
 
@@ -648,7 +667,7 @@ function collectUrlFields(data) {
    */
   function visit(value, path, property) {
     if (typeof value === 'string') {
-      if (urlProps.has(property)) found.push({ path, value });
+      if (URL_PROPS.has(property)) found.push({ path, value });
       return;
     }
     if (Array.isArray(value)) {
@@ -674,6 +693,7 @@ const ISO8601_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\
 const ISO4217_RE = /^[A-Z]{3}$/;
 
 /**
+ * Check if a date string satisfies ISO 8601 calendar date bounds.
  * @param {string} value
  * @returns {boolean}
  */
@@ -692,6 +712,7 @@ function isIso8601Date(value) {
 }
 
 /**
+ * Check if a currency code satisfies ISO 4217 (3 uppercase ASCII letters).
  * @param {string} value
  * @returns {boolean}
  */
@@ -738,6 +759,26 @@ function collectValueChecks(data) {
       visit(child, childPath);
     }
   }
+}
+
+
+/**
+ * Google rich-result and schema.org rule catalog aggregator.
+ * Re-exports declarative rules and validation helpers from src/catalog/.
+ * @file
+ */
+
+
+
+/** @typedef {import('./types.js').TypeRule} TypeRule */
+
+/**
+ * Find the best matching rule for an entity type list.
+ * @param {string[]} types
+ * @returns {TypeRule|null}
+ */
+function matchRule(types) {
+  return matchRuleInCatalog(RICH_RESULT_RULES, types);
 }
 
 
@@ -1394,11 +1435,11 @@ function validateEntity(entity) {
     if (types.includes(dep)) {
       pushFinding(findings, {
         severity: 'info',
-        code: 'HOWTO_GOOGLE_UNSUPPORTED',
-        message: 'HowTo structured data is no longer supported as a Google rich result.',
+        code: `${dep.toUpperCase()}_GOOGLE_UNSUPPORTED`,
+        message: `${dep} structured data is no longer supported as a Google rich result.`,
         entityId: id,
         path: entity.path,
-        docsUrl: 'https://developers.google.com/search/blog/2023/08/howto-faq-changes',
+        docsUrl: 'https://developers.google.com/search/updates',
       });
     }
   }

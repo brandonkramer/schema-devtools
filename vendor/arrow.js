@@ -883,16 +883,19 @@ function createRenderFn(capture) {
                     return null;
                 renderedList[i] = mountItem(item, fragment);
             }
-            const parent = first.parentNode;
+            const parent = first?.parentNode;
             if (parent && first === parent.firstChild && last === parent.lastChild) {
                 parent.replaceChildren(fragment);
             }
-            else {
+            else if (parent && last?.parentNode === parent) {
                 const range = document.createRange();
                 range.setStartBefore(first);
                 range.setEndAfter(last);
                 range.deleteContents();
                 range.insertNode(fragment);
+            }
+            else if (parent) {
+                parent.appendChild(fragment);
             }
             for (let i = oldStart; i <= oldEnd; i++) {
                 const stale = previousList[i];
@@ -1168,8 +1171,8 @@ function removeUnmounted(chunk, detached = false) {
         if (!detached && chunk.length) {
             const first = getNode(chunk[0], undefined, true);
             const last = getNode(chunk[chunk.length - 1]);
-            const parent = first.parentNode;
-            if (parent) {
+            const parent = first?.parentNode;
+            if (parent && last?.parentNode === parent) {
                 if (first === parent.firstChild && last === parent.lastChild) {
                     parent.textContent = '';
                 }
@@ -1179,6 +1182,11 @@ function removeUnmounted(chunk, detached = false) {
                     range.setEndAfter(last);
                     range.deleteContents();
                 }
+                detached = true;
+            }
+            else if (parent) {
+                try { first?.remove?.(); } catch (e) {}
+                try { last?.remove?.(); } catch (e) {}
                 detached = true;
             }
         }

@@ -13,10 +13,9 @@ const vendor = readFileSync(new URL('vendor/arrow.js', root), 'utf8');
 
 assert.match(panelHtml, /type="module" src="panel.js"/, 'Panel must load as an ES module.');
 assert.match(panelApp, /from '\.\.\/vendor\/arrow\.js'/, 'Panel UI must use the vendored ArrowJS runtime.');
-assert.match(panelApp, /\$\{\(\) => entities\.map/, 'Entity lists must be reactive template arrays, not static html interpolations.');
-assert.match(panelApp, /\$\{\(\) => TreeValue/, 'Nested tree templates must stay functions so ArrowJS does not stringify them.');
-assert.doesNotMatch(panelApp, /\$\{TreeValue\(/, 'Do not interpolate html templates as static values.');
-assert.doesNotMatch(panelApp, /\$\{entities\.map/, 'Do not interpolate mapped html templates as static values.');
+assert.match(panelApp, /\$\{\(\) => \{\s*const entities = visibleEntities/, 'Entity lists must be reactive template slots.');
+assert.match(panelApp, /\$\{\(\) => Detail\(\)\}/, 'Detail view must stay a reactive function boundary.');
+assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel templates must not assign innerHTML.');
 assert.match(vendor, /from ['"]\.\/chunks\/internal-/, 'Vendored ArrowJS must stay self-contained in the extension.');
 assert.match(vendor, /template\.isT = true/, 'Vendor must be dist/index.mjs so html templates keep isT; index.min.mjs mangles it.');
 assert.doesNotMatch(vendor, /o\.I=1/, 'Do not vendor the minified Arrow entry that breaks isTpl detection.');
@@ -38,7 +37,7 @@ assert.match(
 );
 assert.doesNotMatch(panelApp, /\.innerHTML/, 'Panel templates must not assign innerHTML.');
 assert.doesNotMatch(panelJs, /\.innerHTML/, 'Panel analysis must not assign innerHTML.');
-assert.match(panelJs, /listen\(chrome\.devtools\.network\?\.onNavigated/, 'Navigation refresh must not assume network.onNavigated exists.');
+assert.match(panelJs, /listen\(chrome\.devtools\?\.network\?\.onNavigated/, 'Navigation refresh must not assume network.onNavigated exists.');
 assert.match(panelJs, /formatEvalException/, 'Eval failures must format Chrome exceptionInfo, not dump Operation failed: %s.');
 
 const hostJs = readFileSync(new URL('devtools/host.js', root), 'utf8');

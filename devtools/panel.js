@@ -57,27 +57,30 @@ const PAGE_WATCH_INSTALL = `(() => {
     return el.hasAttribute('itemscope') || el.hasAttribute('itemtype') || el.hasAttribute('itemprop')
       || el.hasAttribute('typeof') || el.hasAttribute('property') || el.hasAttribute('vocab');
   };
-  const observer = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      if (isOverlay(m.target)) continue;
-      if (m.type === 'characterData') {
-        const host = m.target.parentElement;
-        if (host && host.tagName === 'SCRIPT') { bump(); return; }
-        continue;
+  const target = document.documentElement || document;
+  if (target) {
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (isOverlay(m.target)) continue;
+        if (m.type === 'characterData') {
+          const host = m.target.parentElement;
+          if (host && host.tagName === 'SCRIPT') { bump(); return; }
+          continue;
+        }
+        if (interesting(m.target)) { bump(); return; }
+        for (const n of m.addedNodes) { if (interesting(n)) { bump(); return; } }
+        for (const n of m.removedNodes) { if (interesting(n)) { bump(); return; } }
       }
-      if (interesting(m.target)) { bump(); return; }
-      for (const n of m.addedNodes) { if (interesting(n)) { bump(); return; } }
-      for (const n of m.removedNodes) { if (interesting(n)) { bump(); return; } }
-    }
-  });
-  observer.observe(document.documentElement, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: ['type', 'itemscope', 'itemtype', 'itemprop', 'typeof', 'property', 'vocab', 'itemref'],
-  });
-  state.observer = observer;
+    });
+    observer.observe(target, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['type', 'itemscope', 'itemtype', 'itemprop', 'typeof', 'property', 'vocab', 'itemref'],
+    });
+    state.observer = observer;
+  }
   const wrap = (fn) => function wrapped() {
     const result = fn.apply(this, arguments);
     bump();
@@ -138,6 +141,10 @@ function showFatal(message) {
  */
 function evalInPage(source) {
   return new Promise((resolve, reject) => {
+    if (!chrome.devtools?.inspectedWindow?.eval) {
+      reject(new Error('DevTools inspectedWindow is unavailable.'));
+      return;
+    }
     chrome.devtools.inspectedWindow.eval(source, (result, exceptionInfo) => {
       if (exceptionInfo && Object.keys(exceptionInfo).length > 0) {
         reject(new Error(formatEvalException(exceptionInfo)));
@@ -452,6 +459,16 @@ function bindActions() {
     }
     copyText(toAgentMarkdown(agentBundle));
   };
+  actions.copyAiPrompt = () => {
+    if (!agentBundle) {
+      setStatus('No agent bundle to copy', true);
+      return;
+    }
+    const md = toAgentMarkdown(agentBundle);
+    const aiPrompt = `Here is the structured Schema.org / JSON-LD knowledge graph extracted from ${snapshot?.url || 'the page'}:\n\n${md}\n\nAnalyze the above semantic entities, relationships, and completeness for search optimization and LLM grounding.`;
+    copyText(aiPrompt);
+    setStatus('Copied AI Prompt to clipboard');
+  };
   actions.openRichResults = () => {
     const url = getPageUrl();
     if (!url) {
@@ -471,12 +488,14 @@ function bindActions() {
 }
 
 async function startPageWatch() {
-  if (watchTimer || !panelVisible) return;
-  const generation = await evalInPage(PAGE_WATCH_INSTALL);
-  if (typeof generation === 'number') lastWatchGeneration = generation;
+  if (watchTimer) return;
+  try {
+    const generation = await evalInPage(PAGE_WATCH_INSTALL);
+    if (typeof generation === 'number') lastWatchGeneration = generation;
+  } catch {}
   watchTimer = setInterval(() => {
     pollPageWatch().catch(() => {});
-  }, 900);
+  }, 400);
 }
 
 function stopPageWatch() {
@@ -489,13 +508,32 @@ function stopPageWatch() {
 async function pollPageWatch() {
   if (analyzing) return;
   try {
-    const gen = await evalInPage(PAGE_WATCH_POLL);
-    if (typeof gen === 'number' && gen > lastWatchGeneration) {
-      lastWatchGeneration = gen;
-      await analyze({ silent: true, keepSelection: true });
+    const info = /** @type {{ gen: number, url: string, readyState: string } | null} */ (
+      await evalInPage(`(() => ({
+        gen: (window.__SCHEMA_DEVTOOLS_WATCH__ && window.__SCHEMA_DEVTOOLS_WATCH__.generation) || 0,
+        url: location.href,
+        readyState: document.readyState
+      }))()`)
+    );
+    if (!info || typeof info !== 'object') return;
+
+    const currentUrl = snapshot?.url || '';
+    const urlChanged = Boolean(info.url && info.url !== currentUrl);
+    const watchNeedsInstall = info.gen === 0;
+    const genBumped = typeof info.gen === 'number' && info.gen > lastWatchGeneration;
+
+    if (urlChanged || watchNeedsInstall || genBumped) {
+      if (watchNeedsInstall || urlChanged) {
+        lastWatchGeneration = 0;
+        const newGen = await evalInPage(PAGE_WATCH_INSTALL).catch(() => 0);
+        if (typeof newGen === 'number') lastWatchGeneration = newGen;
+      } else {
+        lastWatchGeneration = info.gen;
+      }
+      await analyze({ silent: !urlChanged, keepSelection: !urlChanged });
     }
   } catch {
-    /* inspected page may be gone */
+    /* inspected page may be navigating or reloading */
   }
 }
 
@@ -504,12 +542,20 @@ function init() {
     bindActions();
     applyTheme();
     mountPanel(document.getElementById('app'));
-    chrome.devtools.panels.setThemeChangeHandler?.(applyTheme);
-    listen(chrome.devtools.network?.onNavigated, () => {
+    chrome.devtools?.panels?.setThemeChangeHandler?.(applyTheme);
+    listen(chrome.devtools?.network?.onNavigated, () => {
       stopPageWatch();
-      analyze()
+      lastWatchGeneration = 0;
+      snapshot = null;
+      analyze({ silent: false, keepSelection: false })
         .then(() => startPageWatch())
         .catch((err) => showFatal(err instanceof Error ? err.message : 'Navigation analysis failed'));
+      setTimeout(() => {
+        analyze({ silent: true, keepSelection: true }).catch(() => {});
+      }, 350);
+      setTimeout(() => {
+        analyze({ silent: true, keepSelection: true }).catch(() => {});
+      }, 900);
     });
     listen(chrome.runtime?.onMessage, (message) => {
       if (message?.type !== 'schema-panel-visibility') return;
