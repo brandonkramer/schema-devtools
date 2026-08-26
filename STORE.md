@@ -17,7 +17,7 @@ Schema DevTools adds a dedicated **Schema** panel to Chrome DevTools so you can 
 - Extracts JSON-LD, Microdata, and RDFa from the page you're inspecting
 - Validates markup against common schema.org and Google rich-result rules
 - Shows a 0–100 quality score with error and warning counts
-- Lists entities with tree and raw JSON views
+- Lists entities with interactive Tree, Raw JSON, Visual Knowledge Graph, and SERP Simulation views
 - Adds a **Schema** sidebar pane in the Elements panel for the selected DOM node
 - Copies JSON, script tags, agent bundles, and markdown summaries for AI-assisted workflows
 - Opens Google Rich Results Test and Schema Markup Validator with the current page URL (only when you click)
@@ -51,9 +51,11 @@ English
 ## Suggested screenshots
 
 1. Schema panel with score, entity list, and tree view on a page with JSON-LD
-2. Findings tab showing errors and warnings
-3. Elements sidebar showing schema on a selected `script[type="application/ld+json"]` node
-4. Dark theme view
+2. Visual Knowledge Graph showing connected @id entity relationships
+3. Google SERP Preview card simulation (Product, Article, Recipe)
+4. Findings tab showing errors, warnings, and Google Search guidelines
+5. Elements sidebar showing schema on a selected DOM node
+6. Dark theme view
 
 ## Keywords (optional)
 

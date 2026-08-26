@@ -14,11 +14,12 @@ if (!target) {
 Schema DevTools — CLI Validator
 
 Usage:
-  node scripts/validate-cli.mjs <file.json | file.html | https://url>
+  npm run validate <file.json | file.html | https://url>
+  node scripts/validate.mjs <file.json | file.html | https://url>
 
 Examples:
-  node scripts/validate-cli.mjs ./test.json
-  node scripts/validate-cli.mjs https://schema.org
+  npm run validate ./sandbox/fixtures.js
+  npm run validate https://example.com/product
 `);
   process.exit(1);
 }
