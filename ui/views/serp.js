@@ -47,6 +47,13 @@ export function SerpView() {
             { class: 'serp-snippet-wrap' },
             card.meta ? div({ class: 'serp-meta' }, card.meta) : '',
             div({ class: 'serp-snippet' }, card.snippet),
+            card.stars
+              ? div(
+                  { class: 'serp-stars' },
+                  span({ class: 'serp-star-glyphs' }, card.stars),
+                  card.reviewBy ? span({ class: 'serp-review-by' }, ` ${card.reviewBy}`) : '',
+                )
+              : '',
           ),
         ),
       ),

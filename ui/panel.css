@@ -844,6 +844,27 @@ a.tree-docs:hover {
   font-weight: 500;
 }
 
+.serp-stars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.serp-star-glyphs {
+  color: #e37400;
+  letter-spacing: 1px;
+}
+
+.serp-review-by {
+  color: var(--sys-color-on-surface-subtle);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
 .serp-snippet {
   font-size: 13px;
   line-height: 1.4;

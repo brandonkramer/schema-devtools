@@ -7,6 +7,7 @@ import {
   RICH_RESULT_RULES,
   LOCAL_BUSINESS_TYPES,
   ORGANIZATION_TYPES,
+  REVIEW_SNIPPET_TYPES,
   VEHICLE_LISTING_TYPES,
   DEPRECATED_TYPES,
   FAQ_GOOGLE_STATUS,
@@ -50,6 +51,10 @@ function isLocalBusiness(types) {
 
 function isOrganization(types) {
   return types.some((type) => ORGANIZATION_TYPES.has(type));
+}
+
+function isReviewSnippet(types) {
+  return types.some((type) => REVIEW_SNIPPET_TYPES.has(type));
 }
 
 /**
@@ -1167,7 +1172,8 @@ function validateEntity(entity, entities) {
   for (const rule of RICH_RESULT_RULES.filter((candidate) => {
     return types.includes(candidate.type)
       || (candidate.type === 'LocalBusiness' && isLocalBusiness(types))
-      || (candidate.type === 'Organization' && isOrganization(types));
+      || (candidate.type === 'Organization' && isOrganization(types))
+      || (candidate.type === 'Review' && isReviewSnippet(types));
   })) {
     for (const req of rule.required) {
       if (!hasEntityPropertyPath(data, req, entities)) {
@@ -1249,7 +1255,7 @@ function validateEntity(entity, entities) {
     findings.push(...validateProductGroup(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
-  if (types.includes('Review')) {
+  if (isReviewSnippet(types)) {
     findings.push(...validateReview(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 

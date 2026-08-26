@@ -717,6 +717,11 @@ const VEHICLE_LISTING_TYPES = new Set([
   'Vehicle', 'Car', 'Motorcycle', 'BusOrCoach', 'MotorizedBicycle',
 ]);
 
+/** Review subtypes eligible for Google's review snippet (not ClaimReview or EmployerReview). */
+const REVIEW_SNIPPET_TYPES = new Set([
+  'Review', 'CriticReview', 'UserReview',
+]);
+
 /** Schema.org LocalBusiness subtypes supported by Google's Local Business guide. */
 const LOCAL_BUSINESS_TYPES = new Set([
   'LocalBusiness', 'AccountingService', 'AnimalShelter', 'Attorney', 'AutomotiveBusiness',
@@ -1474,6 +1479,10 @@ function isLocalBusiness(types) {
 
 function isOrganization(types) {
   return types.some((type) => ORGANIZATION_TYPES.has(type));
+}
+
+function isReviewSnippet(types) {
+  return types.some((type) => REVIEW_SNIPPET_TYPES.has(type));
 }
 
 /**
@@ -2591,7 +2600,8 @@ function validateEntity(entity, entities) {
   for (const rule of RICH_RESULT_RULES.filter((candidate) => {
     return types.includes(candidate.type)
       || (candidate.type === 'LocalBusiness' && isLocalBusiness(types))
-      || (candidate.type === 'Organization' && isOrganization(types));
+      || (candidate.type === 'Organization' && isOrganization(types))
+      || (candidate.type === 'Review' && isReviewSnippet(types));
   })) {
     for (const req of rule.required) {
       if (!hasEntityPropertyPath(data, req, entities)) {
@@ -2673,7 +2683,7 @@ function validateEntity(entity, entities) {
     findings.push(...validateProductGroup(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
-  if (types.includes('Review')) {
+  if (isReviewSnippet(types)) {
     findings.push(...validateReview(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
@@ -2898,7 +2908,8 @@ function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
     return entity.types.includes(rule.type)
       || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)))
-      || (rule.type === 'Organization' && entity.types.some((type) => ORGANIZATION_TYPES.has(type)));
+      || (rule.type === 'Organization' && entity.types.some((type) => ORGANIZATION_TYPES.has(type)))
+      || (rule.type === 'Review' && entity.types.some((type) => REVIEW_SNIPPET_TYPES.has(type)));
   });
 }
 

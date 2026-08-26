@@ -17,6 +17,11 @@ export const VEHICLE_LISTING_TYPES = new Set([
   'Vehicle', 'Car', 'Motorcycle', 'BusOrCoach', 'MotorizedBicycle',
 ]);
 
+/** Review subtypes eligible for Google's review snippet (not ClaimReview or EmployerReview). */
+export const REVIEW_SNIPPET_TYPES = new Set([
+  'Review', 'CriticReview', 'UserReview',
+]);
+
 /** Schema.org LocalBusiness subtypes supported by Google's Local Business guide. */
 export const LOCAL_BUSINESS_TYPES = new Set([
   'LocalBusiness', 'AccountingService', 'AnimalShelter', 'Attorney', 'AutomotiveBusiness',

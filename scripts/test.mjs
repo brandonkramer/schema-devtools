@@ -454,6 +454,27 @@ const standaloneReview = runInspect({
   reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@type': 'Person', name: 'Author' },
 });
 assert(hasCode(standaloneReview, 'MISSING_ITEMREVIEWED'), 'Standalone Reviews must require itemReviewed.');
+for (const type of ['CriticReview', 'UserReview']) {
+  const standaloneSubtype = runInspect({
+    '@context': 'https://schema.org', '@type': type,
+    reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@type': 'Person', name: 'Author' },
+  });
+  assert(hasCode(standaloneSubtype, 'MISSING_ITEMREVIEWED'), `Standalone ${type} must require itemReviewed.`);
+  const incompleteSubtype = runInspect({
+    '@context': 'https://schema.org', '@type': type,
+    itemReviewed: { '@type': 'Book', name: 'Example Book' },
+    reviewRating: { '@type': 'Rating', ratingValue: 5 },
+  });
+  assert(hasCode(incompleteSubtype, 'MISSING_AUTHOR'), `${type} must require author.`);
+  const nestedSubtype = runInspect({
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@id': '#book', '@type': 'Book', name: 'Example Book', review: { '@id': '#review' } },
+      { '@id': '#review', '@type': type, reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@type': 'Person', name: 'Author' } },
+    ],
+  });
+  assert(!hasCode(nestedSubtype, 'MISSING_ITEMREVIEWED'), `Nested ${type} must not require itemReviewed.`);
+}
 const referencedProfile = runInspect({
   '@context': 'https://schema.org',
   '@graph': [
@@ -789,6 +810,44 @@ assert.match(productCard.meta, /Member USD 29.99/);
 assert(cards.some((c) => c.kind === 'Movie' && c.title === 'A Star Is Born'), 'Movie SERP card must be generated.');
 assert(cards.some((c) => c.kind === 'Organization' && c.meta.includes('Loyalty')), 'Organization SERP card must be generated.');
 assert(cards.some((c) => c.kind === 'VacationRental' && c.meta.includes('Sleeps 4')), 'VacationRental SERP card must be generated.');
+store.entities = [
+  {
+    id: 'https://example.com/#article', types: ['BlogPosting'], format: 'jsonld', sourceIndex: 0,
+    data: { '@id': '#article', headline: 'PetPlate Review 2026', datePublished: '2026-07-04' },
+  },
+  {
+    id: 'https://example.com/#review', types: ['Review'], format: 'jsonld', sourceIndex: 0,
+    data: {
+      '@id': '#review',
+      itemReviewed: { '@id': '#product' },
+      author: { '@id': '#author' },
+      reviewRating: { '@id': '#review/rating' },
+      reviewBody: 'Fresh gently cooked meals.',
+    },
+  },
+  {
+    id: 'https://example.com/#review/rating', types: ['Rating'], format: 'jsonld', sourceIndex: 0,
+    data: { '@id': '#review/rating', '@type': 'Rating', ratingValue: 4.6, bestRating: 5 },
+  },
+  {
+    id: 'https://example.com/#author', types: ['Person'], format: 'jsonld', sourceIndex: 0,
+    data: { '@id': '#author', name: 'Sara Seitz' },
+  },
+  {
+    id: 'https://example.com/#product', types: ['Product'], format: 'jsonld', sourceIndex: 0,
+    data: { '@id': '#product', name: 'PetPlate Dog Food' },
+  },
+];
+const linkedCards = serpCards();
+const linkedReview = linkedCards.find((card) => card.kind === 'Review');
+assert(linkedReview, 'Linked Review graph must produce a Review card.');
+assert.match(linkedReview.title, /PetPlate Dog Food/);
+assert.match(linkedReview.stars, /4\.6/);
+assert.match(linkedReview.reviewBy, /Sara Seitz/);
+const linkedArticle = linkedCards.find((card) => card.kind === 'BlogPosting');
+assert(linkedArticle, 'Article card must remain when a Review is present.');
+assert.match(linkedArticle.stars, /4\.6/);
+assert.match(linkedArticle.reviewBy, /Sara Seitz/);
 assert.equal(entityDownloadName({ types: ['Product'], data: { name: 'Acme Anvil' } }), 'product-acme-anvil.json');
 
 assert.equal(

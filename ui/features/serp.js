@@ -1,12 +1,31 @@
-import { readText, readUrl, store } from '../store.js';
+import { entityIdIndex, readText, readUrl, refTarget, store } from '../store.js';
+
+/**
+ * @param {unknown} value
+ * @param {ReturnType<typeof entityIdIndex>} idMap
+ * @returns {Record<string, unknown>}
+ */
+function resolveRecord(value, idMap) {
+  const target = refTarget(value, idMap);
+  const inline = value && typeof value === 'object' && !Array.isArray(value)
+    ? /** @type {Record<string, unknown>} */ (value)
+    : {};
+  return target ? { ...target.data, ...inline } : firstRecord(value);
+}
 
 /**
  * @param {Record<string, unknown>} data
+ * @param {ReturnType<typeof entityIdIndex>} idMap
  */
-function readRating(data) {
-  const rating = data.aggregateRating || data.reviewRating;
-  if (!rating || typeof rating !== 'object' || Array.isArray(rating)) return null;
-  const obj = /** @type {Record<string, unknown>} */ (rating);
+function readRating(data, idMap, depth = 0) {
+  if (depth > 2) return null;
+  const raw = data.aggregateRating || data.reviewRating || (data.ratingValue != null ? data : null);
+  const obj = resolveRecord(raw, idMap);
+  if (!obj || obj.ratingValue == null) {
+    if (depth > 0 || !data.review) return null;
+    const nested = resolveRecord(data.review, idMap);
+    return Object.keys(nested).length ? readRating(nested, idMap, depth + 1) : null;
+  }
   const value = Number(obj.ratingValue);
   if (Number.isNaN(value)) return null;
   const best = Number(obj.bestRating ?? 5) || 5;
@@ -14,9 +33,35 @@ function readRating(data) {
   return { value, best, count: count == null ? '' : String(count) };
 }
 
+/**
+ * @param {Record<string, unknown>} data
+ * @param {ReturnType<typeof entityIdIndex>} idMap
+ */
+function readAuthorName(data, idMap) {
+  const author = resolveRecord(data.author, idMap);
+  return readText(author.name) || readText(data.author);
+}
+
+function formatScore(value) {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
+}
+
 function starString(value, best) {
-  const filled = Math.round((value / best) * 5);
-  return `${'★'.repeat(Math.max(0, Math.min(5, filled)))}${'☆'.repeat(Math.max(0, 5 - filled))}`;
+  const scaled = (value / best) * 5;
+  let full = Math.floor(scaled);
+  const frac = scaled - full;
+  let half = false;
+  if (frac >= 0.75) full += 1;
+  else if (frac >= 0.25) half = true;
+  full = Math.max(0, Math.min(5, full));
+  const empty = Math.max(0, 5 - full - (half ? 1 : 0));
+  return `${'★'.repeat(full)}${half ? '½' : ''}${'☆'.repeat(empty)}`;
+}
+
+function findPageReview() {
+  return store.entities.find((entity) =>
+    entity.types.some((type) => ['Review', 'CriticReview', 'UserReview'].includes(type))
+  ) || null;
 }
 
 function safeHttpUrl(value) {
@@ -78,6 +123,7 @@ const ORG_SERP_TYPES = [
 export function serpCards() {
   const cards = [];
   const seen = new Set();
+  const idMap = entityIdIndex();
   for (const entity of store.entities) {
     const key = entity.types.find((type) => [
       'Product', 'Recipe', 'NewsArticle', 'Article', 'BlogPosting', 'BreadcrumbList', 'Event',
@@ -88,15 +134,15 @@ export function serpCards() {
       'Organization', 'OnlineStore', 'OnlineBusiness', 'NewsMediaOrganization', 'Corporation',
     ].includes(type));
     if (!key || seen.has(`${key}:${entity.id}`)) continue;
-    const card = serpCardFor(entity);
+    const card = serpCardFor(entity, idMap);
     if (!card) continue;
     seen.add(`${key}:${entity.id}`);
-    cards.push(card);
+    cards.push({ stars: '', reviewBy: '', ...card });
   }
   return cards;
 }
 
-function serpCardFor(entity) {
+function serpCardFor(entity, idMap) {
   const { types, data } = entity;
   const cite = (readUrl(data.url) || store.snapshotCanonical || store.snapshotUrl || '').replace(/^https?:\/\//, '');
   const image = safeHttpUrl(readUrl(data.image || data.thumbnailUrl));
@@ -122,9 +168,8 @@ function serpCardFor(entity) {
     const price = readText(offerObj.price);
     const currency = readText(offerObj.priceCurrency);
     const avail = readText(offerObj.availability).replace(/^https?:\/\/schema\.org\//, '');
-    const rating = readRating(data);
+    const rating = readRating(data, idMap);
     const bits = [];
-    if (rating) bits.push(`${starString(rating.value, rating.best)} ${rating.value}${rating.count ? ` (${rating.count})` : ''}`);
     if (price) bits.push(currency ? `${currency} ${price}` : price);
     if (avail) bits.push(avail);
     const member = memberPriceChip(offerObj);
@@ -140,13 +185,13 @@ function serpCardFor(entity) {
       title: readText(data.name) || 'Product',
       snippet: (readText(data.description) || '').slice(0, 160),
       meta: bits.join(' · '),
+      stars: rating ? `${starString(rating.value, rating.best)} ${formatScore(rating.value)}${rating.count ? ` (${rating.count})` : ''}` : '',
       image,
     };
   }
   if (types.includes('Recipe')) {
-    const rating = readRating(data);
+    const rating = readRating(data, idMap);
     const bits = [readText(data.totalTime || data.cookTime), readText(data.recipeYield)];
-    if (rating) bits.unshift(`${starString(rating.value, rating.best)} ${rating.value}`);
     return {
       entity,
       kind: 'Recipe',
@@ -154,17 +199,23 @@ function serpCardFor(entity) {
       title: readText(data.name) || 'Recipe',
       snippet: (readText(data.description) || '').slice(0, 160),
       meta: bits.filter(Boolean).join(' · '),
+      stars: rating ? `${starString(rating.value, rating.best)} ${formatScore(rating.value)}` : '',
       image,
     };
   }
   if (types.includes('NewsArticle') || types.includes('Article') || types.includes('BlogPosting')) {
+    const pageReview = findPageReview();
+    const rating = pageReview ? readRating(pageReview.data, idMap) : null;
+    const reviewBy = pageReview ? readAuthorName(pageReview.data, idMap) : '';
     return {
       entity,
       kind: types.includes('NewsArticle') ? 'Article' : types[0],
       cite,
       title: readText(data.headline || data.name) || 'Article',
-      snippet: [readText(data.datePublished), readText(data.author)].filter(Boolean).join(' · '),
+      snippet: [readText(data.datePublished), readAuthorName(data, idMap) || readText(data.author)].filter(Boolean).join(' · '),
       meta: (readText(data.description) || '').slice(0, 140),
+      stars: rating ? `${starString(rating.value, rating.best)} ${formatScore(rating.value)}` : '',
+      reviewBy: reviewBy ? `Review by ${reviewBy}` : '',
       image,
     };
   }
@@ -219,7 +270,7 @@ function serpCardFor(entity) {
     };
   }
   if (types.includes('VacationRental')) {
-    const rating = readRating(data);
+    const rating = readRating(data, idMap);
     const place = firstRecord(data.containsPlace);
     const occupancy = readText(firstRecord(place.occupancy).value);
     const addr = data.address && typeof data.address === 'object'
@@ -240,7 +291,7 @@ function serpCardFor(entity) {
     };
   }
   if (types.includes('Movie')) {
-    const rating = readRating(data);
+    const rating = readRating(data, idMap);
     const bits = [readText(data.director), readText(data.dateCreated)].filter(Boolean);
     if (rating) bits.unshift(`${starString(rating.value, rating.best)} ${rating.value}`);
     return {
@@ -254,7 +305,7 @@ function serpCardFor(entity) {
     };
   }
   if (types.includes('SoftwareApplication') && !types.includes('Product')) {
-    const rating = readRating(data);
+    const rating = readRating(data, idMap);
     const offer = firstRecord(data.offers);
     const bits = [readText(data.applicationCategory), readText(data.operatingSystem)].filter(Boolean);
     const price = readText(offer.price);
@@ -271,7 +322,7 @@ function serpCardFor(entity) {
     };
   }
   if (types.some((type) => LOCAL_SERP_TYPES.includes(type))) {
-    const rating = readRating(data);
+    const rating = readRating(data, idMap);
     const bits = [];
     if (rating) bits.push(`${starString(rating.value, rating.best)} ${rating.value}${rating.count ? ` (${rating.count})` : ''}`);
     const price = readText(data.priceRange);
@@ -293,21 +344,19 @@ function serpCardFor(entity) {
     };
   }
   if (types.includes('Review') || types.includes('CriticReview') || types.includes('UserReview')) {
-    const item = data.itemReviewed && typeof data.itemReviewed === 'object' ? /** @type {Record<string, unknown>} */ (data.itemReviewed) : {};
+    const item = resolveRecord(data.itemReviewed, idMap);
     const itemName = readText(item.name) || readText(data.name) || 'Reviewed Item';
-    const author = data.author && typeof data.author === 'object' ? readText(/** @type {Record<string, unknown>} */(data.author).name) : readText(data.author);
-    const rating = readRating(data.reviewRating || data);
-    const bits = [];
-    if (rating) bits.push(`${starString(rating.value, rating.best)} ${rating.value}/${rating.best}`);
-    if (author) bits.push(`By ${author}`);
-    if (data.datePublished) bits.push(readText(data.datePublished));
+    const author = readAuthorName(data, idMap);
+    const rating = readRating(data, idMap);
     return {
       entity,
       kind: 'Review',
       cite,
       title: `${itemName} — Review`,
       snippet: (readText(data.reviewBody || data.description) || '').slice(0, 160),
-      meta: bits.join(' · '),
+      meta: data.datePublished ? readText(data.datePublished) : '',
+      stars: rating ? `${starString(rating.value, rating.best)} ${formatScore(rating.value)}${rating.best !== 5 ? `/${rating.best}` : ''}` : '',
+      reviewBy: author ? `Review by ${author}` : '',
       image,
     };
   }
