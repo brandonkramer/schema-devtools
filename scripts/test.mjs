@@ -12,6 +12,7 @@ import { DEPRECATED_TYPES, FAQ_GOOGLE_STATUS } from '../src/catalog/deprecations
 import { matchRuleInCatalog, hasProperty, isIso8601Date, isIso4217Currency } from '../src/catalog/syntax.js';
 import { formatEvalException, listen } from '../devtools/host.js';
 import { matchesSearch, store, visibleEntities } from '../ui/store.js';
+import { FIXTURES } from '../sandbox/fixtures.js';
 
 const root = new URL('../', import.meta.url);
 
@@ -234,7 +235,54 @@ assert.equal(isIso8601Date('2026-02-30'), false);
 assert.equal(isIso4217Currency('USD'), true);
 assert.equal(isIso4217Currency('INVALID'), false);
 
-console.log(`✅ Passed (${RICH_RESULT_RULES.length} active rich-result rules, ${DEPRECATED_TYPES.length} deprecations)`);
+// Verify all sandbox fixtures
+const fixtureKeys = Object.keys(FIXTURES);
+assert(fixtureKeys.length >= 15, `Expected 15+ fixtures, got ${fixtureKeys.length}`);
+for (const [key, fixture] of Object.entries(FIXTURES)) {
+  assert(fixture.name && typeof fixture.name === 'string', `Fixture ${key} missing name`);
+  assert(fixture.url && typeof fixture.url === 'string', `Fixture ${key} missing url`);
+  assert(Array.isArray(fixture.entities) && fixture.entities.length > 0, `Fixture ${key} has no entities`);
+
+  const jsonldBlocks = fixture.entities.filter((e) => !e.format || e.format === 'jsonld');
+  const microdataNodes = fixture.entities.filter((e) => e.format === 'microdata');
+  const rdfaNodes = fixture.entities.filter((e) => e.format === 'rdfa');
+
+  const snapshot = {
+    url: fixture.url,
+    canonical: fixture.canonical || fixture.url,
+    jsonld: jsonldBlocks.map((e, index) => ({
+      index,
+      raw: JSON.stringify(e.data || e),
+      parsed: e.data || e,
+      parseError: null,
+      selector: `jsonld:${index}`,
+    })),
+    microdata: microdataNodes.map((e, index) => ({
+      format: 'microdata',
+      type: e.types || ['Thing'],
+      properties: e.data || {},
+      selector: `div[itemscope]:nth-of-type(${index + 1})`,
+    })),
+    rdfa: rdfaNodes.map((e, index) => ({
+      format: 'rdfa',
+      type: e.types || ['Thing'],
+      properties: e.data || {},
+      selector: `div[typeof]:nth-of-type(${index + 1})`,
+    })),
+  };
+
+  const { entities } = normalize(snapshot);
+  assert(entities.length > 0, `Fixture ${key} normalized 0 entities`);
+  const findings = validate(snapshot, entities);
+  const q = score(findings, entities);
+  assert(typeof q.total === 'number' && q.total >= 0 && q.total <= 100, `Fixture ${key} produced invalid score`);
+
+  if (key === 'errors') {
+    assert(q.errorCount > 0, 'Errors fixture must trigger at least 1 error finding');
+  }
+}
+
+console.log(`✅ Passed (${RICH_RESULT_RULES.length} active rich-result rules, ${DEPRECATED_TYPES.length} deprecations, ${fixtureKeys.length} fixtures)`);
 
 // -----------------------------------------------------------------------------
 // 4. VanJS Modular UI & DevTools Host Smoke Tests
