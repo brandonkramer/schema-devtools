@@ -1,3 +1,6 @@
+import { mountSidebar, store } from '../ui/sidebar.js';
+import { formatEvalException, listen } from './host.js';
+
 const engine = globalThis.SchemaDT || {};
 const EXTRACT_SOURCE = engine.EXTRACT_SOURCE;
 const normalize = engine.normalize;
@@ -231,10 +234,10 @@ let lastEntities = [];
 let selectionRun = 0;
 let pageRun = 0;
 
-const $ = (id) => document.getElementById(id);
-
 function applyTheme(theme = chrome.devtools?.panels?.themeName) {
-  document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'default';
+  const name = theme === 'dark' ? 'dark' : 'default';
+  document.documentElement.dataset.theme = name;
+  store.theme = name;
 }
 
 /**
@@ -245,13 +248,7 @@ function evalInPage(source) {
   return new Promise((resolve, reject) => {
     chrome.devtools.inspectedWindow.eval(source, (result, exceptionInfo) => {
       if (exceptionInfo && Object.keys(exceptionInfo).length > 0) {
-        const value = exceptionInfo.value;
-        const message =
-          (value && typeof value === 'object' && 'message' in value && value.message) ||
-          exceptionInfo.description ||
-          value ||
-          'Evaluation failed';
-        reject(new Error(String(message)));
+        reject(new Error(formatEvalException(exceptionInfo)));
         return;
       }
       resolve(result);
@@ -260,67 +257,30 @@ function evalInPage(source) {
 }
 
 function showEmpty(message = 'No schema on this node') {
-  $('empty-state').textContent = message;
-  $('empty-state').classList.remove('hidden');
-  $('content').classList.add('hidden');
+  store.empty = true;
+  store.message = message;
+  store.format = '';
+  store.types = '';
+  store.properties = [];
+  store.findings = [];
 }
 
 /**
  * @param {Record<string, unknown>} nodeInfo
  */
 function showContent(nodeInfo) {
-  $('empty-state').classList.add('hidden');
-  $('content').classList.remove('hidden');
-
   const format = String(nodeInfo.format || '');
-  $('format-badge').textContent = format;
   const types = /** @type {string[]} */ (nodeInfo.types || []);
-  $('type-name').textContent = types.join(', ') || 'Unknown';
-
-  const propsList = $('props-list');
-  propsList.replaceChildren();
   const properties = /** @type {Record<string, unknown>} */ (nodeInfo.properties || {});
   const keys = Object.keys(properties);
-  if (keys.length === 0) {
-    const dt = document.createElement('dt');
-    dt.textContent = '—';
-    const dd = document.createElement('dd');
-    dd.textContent = 'No key properties';
-    propsList.append(dt, dd);
-  } else {
-    for (const key of keys) {
-      const dt = document.createElement('dt');
-      dt.textContent = key;
-      const dd = document.createElement('dd');
-      dd.textContent = String(properties[key] ?? '');
-      dd.title = dd.textContent;
-      propsList.append(dt, dd);
-    }
-  }
-
-  const relevant = filterFindingsForNode(nodeInfo);
-  const findingsSection = $('findings-section');
-  const findingsList = $('findings-list');
-  findingsList.replaceChildren();
-
-  if (relevant.length === 0) {
-    findingsSection.classList.add('hidden');
-    return;
-  }
-  findingsSection.classList.remove('hidden');
-
-  for (const finding of relevant) {
-    const li = document.createElement('li');
-    li.className = `finding-item severity-${finding.severity}`;
-    const code = document.createElement('span');
-    code.className = 'finding-code';
-    code.textContent = finding.code;
-    const msg = document.createElement('span');
-    msg.className = 'finding-message';
-    msg.textContent = finding.message;
-    li.append(code, msg);
-    findingsList.append(li);
-  }
+  store.empty = false;
+  store.message = '';
+  store.format = format;
+  store.types = types.join(', ') || 'Unknown';
+  store.properties = keys.length === 0
+    ? [{ key: '—', value: 'No key properties' }]
+    : keys.map((key) => ({ key, value: String(properties[key] ?? '') }));
+  store.findings = filterFindingsForNode(nodeInfo);
 }
 
 /**
@@ -328,7 +288,7 @@ function showContent(nodeInfo) {
  * @returns {Finding[]}
  */
 function filterFindingsForNode(nodeInfo) {
-  const types = new Set(/** @type {string[]} */ (nodeInfo.types || []).map((t) => t.toLowerCase()));
+  const types = new Set(/** @type {string[]} */ (nodeInfo.types || []).map((type) => type.toLowerCase()));
   const format = String(nodeInfo.format || '');
   const sourceIndex = Number(nodeInfo.sourceIndex);
 
@@ -345,15 +305,15 @@ function filterFindingsForNode(nodeInfo) {
     }).slice(0, 12);
   }
 
-  return lastFindings.filter((f) => {
-    if (nodeInfo.parseError && f.code === 'JSONLD_PARSE') return true;
-    const msg = f.message.toLowerCase();
-    for (const t of types) {
-      if (msg.includes(t.toLowerCase())) return true;
+  return lastFindings.filter((finding) => {
+    if (nodeInfo.parseError && finding.code === 'JSONLD_PARSE') return true;
+    const msg = finding.message.toLowerCase();
+    for (const type of types) {
+      if (msg.includes(type.toLowerCase())) return true;
     }
-    if (format === 'jsonld' && f.code.startsWith('JSONLD')) return true;
-    if (format === 'microdata' && f.code.includes('MICRODATA')) return true;
-    if (format === 'rdfa' && f.code.includes('RDFA')) return true;
+    if (format === 'jsonld' && finding.code.startsWith('JSONLD')) return true;
+    if (format === 'microdata' && finding.code.includes('MICRODATA')) return true;
+    if (format === 'rdfa' && finding.code.includes('RDFA')) return true;
     return false;
   }).slice(0, 12);
 }
@@ -404,15 +364,16 @@ async function onSelectionChanged() {
 
 function init() {
   applyTheme();
+  mountSidebar(document.getElementById('app'));
   if (!EXTRACT_SOURCE || typeof normalize !== 'function' || typeof validate !== 'function') {
     showEmpty('Schema engine failed to load. Reload the extension and reopen DevTools.');
     return;
   }
   chrome.devtools.panels.setThemeChangeHandler?.(applyTheme);
-  chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
+  listen(chrome.devtools.panels.elements?.onSelectionChanged, () => {
     onSelectionChanged();
   });
-  chrome.devtools.network.onNavigated.addListener(() => {
+  listen(chrome.devtools.network?.onNavigated, () => {
     pageRun++;
     lastSnapshot = null;
     lastFindings = [];

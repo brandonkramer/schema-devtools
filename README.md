@@ -18,9 +18,10 @@ All analysis runs **100% locally in your browser** — zero host permissions, ze
   - **SERP Preview** — Non-authoritative Google Search card simulation for Products, Articles, Recipes, and Breadcrumbs.
 - ⚡ **Live SPA & Mutation Updates** — Automatically detects dynamic schema changes, client-side route changes (Next.js, Nuxt, Shopify, React), and DOM mutations.
 - 🎯 **In-Page DOM Highlighting** — Hovering or clicking an entity outlines its corresponding visual DOM node on the live webpage.
+- 🧭 **Inspect in Elements** — Optional reveal of the source node in the Elements panel (button or Alt-click). Ordinary clicks stay on the Schema tab.
 - 🤖 **AI Agent & LLM Exports** — One-click **Copy Agent Bundle** (structured JSON) and **Copy Agent Markdown** for seamless integration with Claude, Cursor, Copilot, and LLM coding assistants.
 - 🔗 **External Validators** — Direct one-click links to Google Rich Results Test and `validator.schema.org` (opens with encoded page URL only on explicit click).
-- 🌓 **Native Theme Parity** — Automatically adapts to Chrome DevTools light and dark themes.
+- 🌓 **Native Theme Parity** — Uses Chrome DevTools system colors and follows the `default` / `dark` theme.
 
 ---
 
@@ -57,7 +58,13 @@ schema/
 ├── privacy.html             # Local-only privacy policy
 ├── README.md                # Project documentation
 ├── STORE.md                 # Chrome Web Store listing metadata
-├── devtools/                # DevTools panel & sidebar UI
+├── vendor/                  # Vendored ArrowJS runtime (no CDN)
+├── ui/                      # ArrowJS store, views, and theme
+│   ├── store.js
+│   ├── app.js
+│   ├── sidebar.js
+│   └── theme.css
+├── devtools/                # Chrome DevTools host pages
 │   ├── devtools.html        # Entrypoint initializing Schema panel & Elements sidebar
 │   ├── devtools.js
 │   ├── panel.html           # Main Schema DevTools panel UI
@@ -76,7 +83,8 @@ schema/
 │   └── types.js             # JSDoc type definitions
 ├── scripts/                 # Build & smoke verification scripts
 │   ├── bundle-engine.mjs    # Engine bundler for classic DevTools script
-│   └── smoke-engine.mjs     # Smoke tests for engine logic
+│   ├── smoke-engine.mjs     # Smoke tests for engine logic
+│   └── smoke-panel.mjs      # Panel selection, theme, and ArrowJS smoke tests
 └── icons/                   # Extension icons (16px, 32px, 48px, 128px)
 ```
 
@@ -89,6 +97,7 @@ Run smoke tests for the extraction, normalization, validation, and scoring engin
 ```bash
 # Run smoke tests
 node scripts/smoke-engine.mjs
+node scripts/smoke-panel.mjs
 
 # Rebuild classic bundle after modifying files in src/
 node scripts/bundle-engine.mjs

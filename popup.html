@@ -4,22 +4,42 @@
   <meta charset="UTF-8">
   <title>Schema DevTools</title>
   <style>
+    :root {
+      --sys-color-base: #fff;
+      --sys-color-base-container: #f1f3f4;
+      --sys-color-divider: #d0d0d0;
+      --sys-color-on-surface: #1f1f1f;
+      --sys-color-on-surface-subtle: #5f6368;
+      --sys-color-primary: #0b57d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --sys-color-base: #1f1f1f;
+        --sys-color-base-container: #292a2d;
+        --sys-color-divider: #3c4043;
+        --sys-color-on-surface: #e3e3e3;
+        --sys-color-on-surface-subtle: #9aa0a6;
+        --sys-color-primary: #8ab4f8;
+      }
+    }
     body {
-      font: 12px/1.4 system-ui, sans-serif;
+      font: 12px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       margin: 0;
       padding: 12px 14px;
       width: 260px;
-      color: #1e1e1e;
+      color: var(--sys-color-on-surface);
+      background: var(--sys-color-base);
     }
     h1 { font-size: 13px; margin: 0 0 6px; }
-    p { margin: 0 0 8px; color: #5c5c5c; }
+    p { margin: 0 0 8px; color: var(--sys-color-on-surface-subtle); }
     kbd {
-      font: 11px ui-monospace, monospace;
-      background: #f3f3f3;
-      border: 1px solid #d4d4d4;
+      font: 11px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      background: var(--sys-color-base-container);
+      border: 1px solid var(--sys-color-divider);
       border-radius: 3px;
       padding: 0 4px;
     }
+    strong { color: var(--sys-color-on-surface); }
   </style>
 </head>
 <body>

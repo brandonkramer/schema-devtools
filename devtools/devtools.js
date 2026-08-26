@@ -8,8 +8,8 @@ chrome.devtools.panels.create(
         void chrome.runtime.lastError;
       });
     };
-    panel.onShown.addListener(() => notifyVisibility(true));
-    panel.onHidden.addListener(() => notifyVisibility(false));
+    panel?.onShown?.addListener(() => notifyVisibility(true));
+    panel?.onHidden?.addListener(() => notifyVisibility(false));
   },
 );
 

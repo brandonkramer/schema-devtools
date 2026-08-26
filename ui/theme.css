@@ -1,0 +1,81 @@
+/* Chrome DevTools system colors (default + dark). themeName is "default" | "dark". */
+:root {
+  --sys-color-base: #fff;
+  --sys-color-base-container: #f1f3f4;
+  --sys-color-tonal-container: #e8eaed;
+  --sys-color-state-hover-on-subtle: rgb(0 0 0 / 6%);
+  --sys-color-state-ripple-neutral-on-subtle: rgb(0 0 0 / 10%);
+  --sys-color-divider: #d0d0d0;
+  --sys-color-on-surface: #1f1f1f;
+  --sys-color-on-surface-subtle: #5f6368;
+  --sys-color-primary: #0b57d0;
+  --sys-color-tonal-outline: #747775;
+  --color-error: #c5221f;
+  --color-warning: #b06000;
+  --color-info: #0b57d0;
+  --lighthouse-pass: #0cce6b;
+  --lighthouse-average: #ffa400;
+  --lighthouse-fail: #ff4e42;
+  --score-excellent: #0cce6b;
+  --score-good: #0b57d0;
+  --score-fair: #ffa400;
+  --score-poor: #ff4e42;
+  --score-none: #5f6368;
+  --serp-cite: #006621;
+  --serp-title: #1a0dab;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --toolbar-height: 26px;
+  --radius: 4px;
+}
+
+:root[data-theme="dark"] {
+  --sys-color-base: #1f1f1f;
+  --sys-color-base-container: #292a2d;
+  --sys-color-tonal-container: #35363a;
+  --sys-color-state-hover-on-subtle: rgb(255 255 255 / 8%);
+  --sys-color-state-ripple-neutral-on-subtle: rgb(255 255 255 / 12%);
+  --sys-color-divider: #3c4043;
+  --sys-color-on-surface: #e3e3e3;
+  --sys-color-on-surface-subtle: #9aa0a6;
+  --sys-color-primary: #8ab4f8;
+  --sys-color-tonal-outline: #8e918f;
+  --color-error: #f28b82;
+  --color-warning: #fdd663;
+  --color-info: #8ab4f8;
+  --score-excellent: #0cce6b;
+  --score-good: #8ab4f8;
+  --score-fair: #ffa400;
+  --score-poor: #ff4e42;
+  --score-none: #9aa0a6;
+  --serp-cite: #81c995;
+  --serp-title: #8ab4f8;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-base);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}

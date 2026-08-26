@@ -7,24 +7,8 @@
   <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
-  <div class="sidebar" id="sidebar">
-    <p class="empty-state" id="empty-state">No schema on this node</p>
-    <div class="content hidden" id="content">
-      <div class="type-row">
-        <span class="format-badge" id="format-badge"></span>
-        <h2 class="type-name" id="type-name"></h2>
-      </div>
-      <section class="props-section">
-        <h3 class="section-label">Key properties</h3>
-        <dl class="props-list" id="props-list"></dl>
-      </section>
-      <section class="findings-section hidden" id="findings-section">
-        <h3 class="section-label">Findings</h3>
-        <ul class="findings-list" id="findings-list"></ul>
-      </section>
-    </div>
-  </div>
+  <div id="app"></div>
   <script src="engine.classic.js"></script>
-  <script src="sidebar.js"></script>
+  <script type="module" src="sidebar.js"></script>
 </body>
 </html>

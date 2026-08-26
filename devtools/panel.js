@@ -1,6 +1,10 @@
 /** @typedef {import('../src/types.js').PageSnapshot} PageSnapshot */
 /** @typedef {import('../src/types.js').Finding} Finding */
 
+import { actions, selectedEntity, store } from '../ui/store.js';
+import { mountPanel } from '../ui/app.js';
+import { formatEvalException, listen } from './host.js';
+
 const engine = globalThis.SchemaDT || {};
 const EXTRACT_SOURCE = engine.EXTRACT_SOURCE;
 const normalize = engine.normalize;
@@ -19,10 +23,6 @@ let findings = [];
 let scoreResult = null;
 /** @type {ReturnType<typeof buildAgentBundle> | null} */
 let agentBundle = null;
-/** @type {string | null} */
-let selectedEntityId = null;
-/** @type {'tree' | 'raw' | 'findings' | 'serp'} */
-let activeView = 'tree';
 let analysisRun = 0;
 let lastWatchGeneration = 0;
 let watchTimer = 0;
@@ -116,22 +116,19 @@ const PAGE_WATCH_REMOVE = `(() => {
   return true;
 })()`;
 
-const $ = (id) => document.getElementById(id);
-
 function applyTheme(theme = chrome.devtools?.panels?.themeName) {
-  document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'default';
+  const name = theme === 'dark' ? 'dark' : 'default';
+  document.documentElement.dataset.theme = name;
+  store.theme = name;
 }
 
 function setStatus(message, isError = false) {
-  const el = $('status');
-  if (!el) return;
-  el.textContent = message;
-  el.classList.toggle('error', isError);
+  store.status = message;
+  store.statusError = isError;
 }
 
 function showFatal(message) {
-  const label = $('score-label');
-  if (label) label.textContent = 'Error';
+  store.fatal = message;
   setStatus(message, true);
 }
 
@@ -143,13 +140,7 @@ function evalInPage(source) {
   return new Promise((resolve, reject) => {
     chrome.devtools.inspectedWindow.eval(source, (result, exceptionInfo) => {
       if (exceptionInfo && Object.keys(exceptionInfo).length > 0) {
-        const value = exceptionInfo.value;
-        const message =
-          (value && typeof value === 'object' && 'message' in value && value.message) ||
-          exceptionInfo.description ||
-          value ||
-          'Evaluation failed';
-        reject(new Error(String(message)));
+        reject(new Error(formatEvalException(exceptionInfo)));
         return;
       }
       resolve(result);
@@ -257,46 +248,28 @@ async function highlightEntity(entity) {
   }
 }
 
-/**
- * @returns {Map<string, {id: string, types: string[], format: string, sourceIndex: number, data: Record<string, unknown>}>}
- */
-function entityIdIndex() {
-  const map = new Map();
-  for (const entity of report?.entities ?? []) {
-    const ids = [entity.id];
-    const atId = entity.data['@id'];
-    if (typeof atId === 'string') ids.push(atId);
-    for (const id of ids) {
-      if (typeof id !== 'string' || !id) continue;
-      map.set(id, entity);
-      const hash = id.includes('#') ? `#${id.slice(id.indexOf('#') + 1)}` : '';
-      if (hash && hash !== '#') map.set(hash, entity);
-    }
-  }
-  return map;
-}
-
-/**
- * @param {unknown} value
- * @param {ReturnType<typeof entityIdIndex>} map
- */
-function refTarget(value, map) {
-  if (typeof value === 'string') return map.get(value) || null;
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const id = /** @type {Record<string, unknown>} */ (value)['@id'];
-    if (typeof id === 'string') return map.get(id) || null;
-  }
-  return null;
-}
-
 function selectEntity(entity, { inspect = false, highlight = true } = {}) {
-  selectedEntityId = entity.id;
-  renderEntities();
-  if (activeView === 'findings') renderAllFindings();
-  else if (activeView === 'serp') renderSerp();
-  else renderDetail();
+  store.selectedEntityId = entity.id;
   if (inspect) inspectEntity(entity);
   if (highlight) highlightEntity(entity);
+}
+
+function syncStore() {
+  store.entities = report?.entities ?? [];
+  store.findings = findings;
+  store.score = scoreResult
+    ? {
+        total: scoreResult.total,
+        label: scoreResult.label,
+        errorCount: scoreResult.errorCount,
+        warningCount: scoreResult.warningCount,
+      }
+    : null;
+  store.snapshotUrl = snapshot?.url || '';
+  store.snapshotCanonical = snapshot?.canonical || '';
+  if (store.selectedEntityId && !store.entities.some((entity) => entity.id === store.selectedEntityId)) {
+    store.selectedEntityId = store.entities[0]?.id ?? null;
+  }
 }
 
 async function analyze(options = {}) {
@@ -310,12 +283,13 @@ async function analyze(options = {}) {
     typeof buildAgentBundle !== 'function' ||
     typeof toAgentMarkdown !== 'function'
   ) {
+    store.engineReady = false;
     showFatal('Engine failed to load. Reload the unpacked extension and reopen DevTools.');
     return;
   }
   analyzing = true;
   const run = ++analysisRun;
-  const previousId = selectedEntityId;
+  const previousId = store.selectedEntityId;
   if (!silent) setStatus('Analyzing page…');
   try {
     let raw;
@@ -338,11 +312,12 @@ async function analyze(options = {}) {
       score: scoreResult,
     });
     if (keepSelection && previousId && report.entities.some((entity) => entity.id === previousId)) {
-      selectedEntityId = previousId;
+      store.selectedEntityId = previousId;
     } else {
-      selectedEntityId = report.entities[0]?.id ?? null;
+      store.selectedEntityId = report.entities[0]?.id ?? null;
     }
-    render();
+    store.fatal = '';
+    syncStore();
     setStatus(
       silent
         ? `Live update · ${snapshot.url || 'page'}`
@@ -353,476 +328,8 @@ async function analyze(options = {}) {
   }
 }
 
-function renderScore() {
-  const ring = $('score-ring');
-  const valueEl = $('score-value');
-  const labelEl = $('score-label');
-  const errorEl = $('error-count');
-  const warningEl = $('warning-count');
-
-  if (!scoreResult) {
-    valueEl.textContent = '—';
-    labelEl.textContent = 'No data';
-    ring.className = 'score-ring';
-    errorEl.textContent = '0 errors';
-    warningEl.textContent = '0 warnings';
-    return;
-  }
-
-  valueEl.textContent = String(scoreResult.total);
-  labelEl.textContent = scoreResult.label;
-  ring.className = `score-ring label-${scoreResult.label}`;
-  errorEl.textContent = `${scoreResult.errorCount} error${scoreResult.errorCount === 1 ? '' : 's'}`;
-  warningEl.textContent = `${scoreResult.warningCount} warning${scoreResult.warningCount === 1 ? '' : 's'}`;
-}
-
 /**
- * @param {string} query
- */
-function matchesSearch(text, query) {
-  return text.toLowerCase().includes(query.toLowerCase());
-}
-
-function renderEntities() {
-  const list = $('entity-list');
-  const empty = $('entities-empty');
-  const countEl = $('entity-count');
-  const query = $('search').value.trim();
-
-  list.replaceChildren();
-  const entities = report?.entities ?? [];
-  countEl.textContent = String(entities.length);
-
-  if (entities.length === 0) {
-    empty.classList.remove('hidden');
-    document.querySelector('.detail-section')?.classList.remove('has-selection');
-    return;
-  }
-  empty.classList.add('hidden');
-
-  for (const entity of entities) {
-    const types = entity.types.join(', ') || 'Unknown';
-    const haystack = `${types} ${entity.format} ${entity.id} ${JSON.stringify(entity.data)}`;
-    const filtered = query && !matchesSearch(haystack, query);
-
-    const li = document.createElement('li');
-    li.className = 'entity-item';
-    if (entity.id === selectedEntityId) li.classList.add('selected');
-    if (filtered) li.classList.add('filtered-out');
-
-    const typeSpan = document.createElement('span');
-    typeSpan.className = 'entity-type';
-    typeSpan.textContent = types;
-    typeSpan.title = types;
-
-    const meta = document.createElement('span');
-    meta.className = 'entity-meta';
-    meta.textContent = `${entity.format} · ${entity.id}`;
-
-    li.append(typeSpan, meta);
-    li.title = 'Select this entity. Alt-click to reveal its source in Elements.';
-    li.addEventListener('click', (event) => {
-      selectEntity(entity, { inspect: event.altKey });
-    });
-    li.addEventListener('mouseenter', () => highlightEntity(entity));
-    list.append(li);
-  }
-
-  document.querySelector('.detail-section')?.classList.toggle('has-selection', Boolean(selectedEntityId));
-}
-
-/**
- * @param {unknown} value
- * @param {number} depth
- * @param {ReturnType<typeof entityIdIndex>} [idMap]
- * @returns {HTMLElement}
- */
-function renderTreeValue(value, depth = 0, idMap = entityIdIndex()) {
-  const wrap = document.createElement('div');
-  wrap.className = 'tree-node';
-  wrap.style.marginLeft = `${depth * 12}px`;
-
-  if (value === null) {
-    const span = document.createElement('span');
-    span.className = 'tree-value';
-    span.textContent = 'null';
-    wrap.append(span);
-    return wrap;
-  }
-  if (typeof value !== 'object') {
-    wrap.append(renderScalar(value, idMap));
-    return wrap;
-  }
-  if (Array.isArray(value)) {
-    const label = document.createElement('div');
-    const type = document.createElement('span');
-    type.className = 'tree-type';
-    type.textContent = `Array[${value.length}]`;
-    label.append(type);
-    wrap.append(label);
-    value.forEach((item, i) => {
-      const row = document.createElement('div');
-      row.style.marginLeft = `${(depth + 1) * 12}px`;
-      const key = document.createElement('span');
-      key.className = 'tree-key';
-      key.textContent = `[${i}]`;
-      row.append(key, document.createTextNode(' '), renderTreeValue(item, depth + 2, idMap));
-      wrap.append(row);
-    });
-    return wrap;
-  }
-
-  const obj = /** @type {Record<string, unknown>} */ (value);
-  const keys = Object.keys(obj);
-  if (keys.length === 1 && keys[0] === '@id') {
-    wrap.append(renderIdRef(obj['@id'], idMap));
-    return wrap;
-  }
-
-  for (const key of keys) {
-    const row = document.createElement('div');
-    row.style.marginLeft = `${depth * 12}px`;
-    const keyEl = document.createElement('span');
-    keyEl.className = 'tree-key';
-    keyEl.textContent = key;
-    row.append(keyEl, document.createTextNode(': '));
-    const val = obj[key];
-    if (key === '@id' || key === '@id'.toLowerCase()) {
-      row.append(renderIdRef(val, idMap));
-    } else if (val !== null && typeof val === 'object') {
-      const target = refTarget(val, idMap);
-      if (target && !Array.isArray(val) && Object.keys(/** @type {object} */ (val)).length <= 2) {
-        row.append(renderEntityLink(target, String(/** @type {Record<string, unknown>} */ (val)['@id'] || target.id)));
-      } else {
-        row.append(renderTreeValue(val, depth + 1, idMap));
-      }
-    } else {
-      row.append(renderScalar(val, idMap));
-    }
-    wrap.append(row);
-  }
-  return wrap;
-}
-
-/**
- * @param {unknown} value
- * @param {ReturnType<typeof entityIdIndex>} idMap
- */
-function renderScalar(value, idMap) {
-  if (typeof value === 'string') {
-    const target = idMap.get(value);
-    if (target) return renderEntityLink(target, value);
-  }
-  const span = document.createElement('span');
-  span.className = 'tree-value';
-  span.textContent = JSON.stringify(value);
-  return span;
-}
-
-/**
- * @param {unknown} value
- * @param {ReturnType<typeof entityIdIndex>} idMap
- */
-function renderIdRef(value, idMap) {
-  if (typeof value === 'string') {
-    const target = idMap.get(value);
-    if (target) return renderEntityLink(target, value);
-  }
-  return renderScalar(value, idMap);
-}
-
-/**
- * @param {{ id: string; types: string[] }} entity
- * @param {string} label
- */
-function renderEntityLink(entity, label) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'tree-link';
-  btn.textContent = label;
-  btn.title = `Jump to ${entity.types.join(', ') || entity.id}`;
-  btn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    selectEntity(entity);
-  });
-  return btn;
-}
-
-/**
- * @param {string} s
- */
-function escapeHtml(s) {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function renderDetail() {
-  const entity = report?.entities.find((e) => e.id === selectedEntityId);
-  const treeEl = $('view-tree');
-  const rawEl = $('view-raw');
-  const findingsEl = $('view-findings');
-
-  treeEl.replaceChildren();
-  rawEl.textContent = '';
-  findingsEl.replaceChildren();
-
-  if (!entity) return;
-
-  treeEl.append(renderTreeValue(entity.data));
-  rawEl.textContent = JSON.stringify(entity.data, null, 2);
-
-  const query = $('search').value.trim();
-  const sourceBlock = report?.blocks.find((block) => {
-    return block.format === entity.format && block.sourceIndex === entity.sourceIndex;
-  });
-  const entityFindings = findings.filter((finding) => {
-    if (finding.entityId) return finding.entityId === entity.id;
-    return Boolean(sourceBlock && finding.path === sourceBlock.selector);
-  });
-
-  for (const finding of entityFindings) {
-    const haystack = `${finding.code} ${finding.message} ${finding.severity}`;
-    const filtered = query && !matchesSearch(haystack, query);
-    const li = document.createElement('li');
-    li.className = `finding-item severity-${finding.severity}`;
-    if (filtered) li.classList.add('filtered-out');
-
-    const code = document.createElement('span');
-    code.className = 'finding-code';
-    code.textContent = finding.code;
-
-    const msg = document.createElement('span');
-    msg.className = 'finding-message';
-    msg.textContent = finding.message;
-
-    li.append(code, msg);
-    if (finding.docsUrl) {
-      const docs = document.createElement('a');
-      docs.className = 'finding-docs';
-      docs.href = finding.docsUrl;
-      docs.target = '_blank';
-      docs.rel = 'noopener';
-      docs.textContent = 'Docs';
-      li.append(docs);
-    }
-    findingsEl.append(li);
-  }
-}
-
-function renderAllFindings() {
-  const findingsEl = $('view-findings');
-  if (activeView !== 'findings') return;
-
-  findingsEl.replaceChildren();
-  const query = $('search').value.trim();
-
-  for (const finding of findings) {
-    const haystack = `${finding.code} ${finding.message} ${finding.severity} ${finding.entityId ?? ''}`;
-    const filtered = query && !matchesSearch(haystack, query);
-    const li = document.createElement('li');
-    li.className = `finding-item severity-${finding.severity}`;
-    if (filtered) li.classList.add('filtered-out');
-
-    const code = document.createElement('span');
-    code.className = 'finding-code';
-    code.textContent = finding.code;
-
-    const msg = document.createElement('span');
-    msg.className = 'finding-message';
-    msg.textContent = finding.message;
-
-    li.append(code, msg);
-    findingsEl.append(li);
-  }
-}
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function readText(value) {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return readText(value[0]);
-  if (value && typeof value === 'object') {
-    const obj = /** @type {Record<string, unknown>} */ (value);
-    if (typeof obj.name === 'string') return obj.name;
-    if (typeof obj.headline === 'string') return obj.headline;
-    if (typeof obj.text === 'string') return obj.text;
-    if (typeof obj['@value'] === 'string') return obj['@value'];
-  }
-  return '';
-}
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function readUrl(value) {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return readUrl(value[0]);
-  if (value && typeof value === 'object') {
-    const obj = /** @type {Record<string, unknown>} */ (value);
-    if (typeof obj.url === 'string') return obj.url;
-    if (typeof obj.contentUrl === 'string') return obj.contentUrl;
-    if (typeof obj['@id'] === 'string' && obj['@id'].startsWith('http')) return obj['@id'];
-  }
-  return '';
-}
-
-/**
- * @param {Record<string, unknown>} data
- */
-function readRating(data) {
-  const rating = data.aggregateRating || data.reviewRating;
-  if (!rating || typeof rating !== 'object' || Array.isArray(rating)) return null;
-  const obj = /** @type {Record<string, unknown>} */ (rating);
-  const value = Number(obj.ratingValue);
-  if (Number.isNaN(value)) return null;
-  const best = Number(obj.bestRating ?? 5) || 5;
-  const count = obj.ratingCount ?? obj.reviewCount;
-  return { value, best, count: count == null ? '' : String(count) };
-}
-
-function starString(value, best) {
-  const filled = Math.round((value / best) * 5);
-  return `${'★'.repeat(Math.max(0, Math.min(5, filled)))}${'☆'.repeat(Math.max(0, 5 - filled))}`;
-}
-
-/**
- * @param {{ types: string[]; data: Record<string, unknown>; id: string }} entity
- * @returns {HTMLElement | null}
- */
-function buildSerpCard(entity) {
-  const types = entity.types;
-  const data = entity.data;
-  const card = document.createElement('article');
-  card.className = 'serp-card';
-
-  const kind = document.createElement('div');
-  kind.className = 'serp-kind';
-
-  const cite = document.createElement('div');
-  cite.className = 'serp-cite';
-  cite.textContent = (readUrl(data.url) || snapshot?.canonical || snapshot?.url || '').replace(/^https?:\/\//, '');
-
-  const title = document.createElement('div');
-  title.className = 'serp-title';
-  title.addEventListener('click', () => selectEntity(entity));
-
-  const snippet = document.createElement('div');
-  snippet.className = 'serp-snippet';
-
-  const meta = document.createElement('div');
-  meta.className = 'serp-meta';
-
-  const imageUrl = readUrl(data.image || data.thumbnailUrl);
-  if (imageUrl && !imageUrl.startsWith('/') && !imageUrl.startsWith('#')) {
-    const img = document.createElement('img');
-    img.className = 'serp-thumb';
-    img.alt = '';
-    img.src = imageUrl;
-    card.append(img);
-  }
-
-  if (types.includes('BreadcrumbList')) {
-    kind.textContent = 'Breadcrumb';
-    const items = Array.isArray(data.itemListElement) ? data.itemListElement : [];
-    const names = items.map((item) => {
-      if (!item || typeof item !== 'object') return '';
-      const obj = /** @type {Record<string, unknown>} */ (item);
-      return readText(obj.name) || readText(obj.item);
-    }).filter(Boolean);
-    title.textContent = names.join(' › ') || 'BreadcrumbList';
-    snippet.textContent = `${names.length} crumb${names.length === 1 ? '' : 's'}`;
-  } else if (types.includes('Product')) {
-    kind.textContent = 'Product';
-    title.textContent = readText(data.name) || 'Product';
-    snippet.textContent = (readText(data.description) || '').slice(0, 160);
-    const offer = Array.isArray(data.offers) ? data.offers[0] : data.offers;
-    const offerObj = offer && typeof offer === 'object' ? /** @type {Record<string, unknown>} */ (offer) : {};
-    const price = readText(offerObj.price);
-    const currency = readText(offerObj.priceCurrency);
-    const avail = readText(offerObj.availability).replace(/^https?:\/\/schema\.org\//, '');
-    const rating = readRating(data);
-    const bits = [];
-    if (rating) bits.push(`${starString(rating.value, rating.best)} ${rating.value}${rating.count ? ` (${rating.count})` : ''}`);
-    if (price) bits.push(currency ? `${currency} ${price}` : price);
-    if (avail) bits.push(avail);
-    meta.textContent = bits.join(' · ');
-  } else if (types.includes('Recipe')) {
-    kind.textContent = 'Recipe';
-    title.textContent = readText(data.name) || 'Recipe';
-    snippet.textContent = (readText(data.description) || '').slice(0, 160);
-    const rating = readRating(data);
-    const bits = [readText(data.totalTime || data.cookTime), readText(data.recipeYield)];
-    if (rating) bits.unshift(`${starString(rating.value, rating.best)} ${rating.value}`);
-    meta.textContent = bits.filter(Boolean).join(' · ');
-  } else if (types.includes('NewsArticle') || types.includes('Article') || types.includes('BlogPosting')) {
-    kind.textContent = types.includes('NewsArticle') ? 'Article' : types[0];
-    title.textContent = readText(data.headline || data.name) || 'Article';
-    const author = readText(data.author);
-    const date = readText(data.datePublished);
-    snippet.textContent = [date, author].filter(Boolean).join(' · ');
-    meta.textContent = (readText(data.description) || '').slice(0, 140);
-  } else if (types.includes('Event')) {
-    kind.textContent = 'Event';
-    title.textContent = readText(data.name) || 'Event';
-    snippet.textContent = [readText(data.startDate), readText(data.location)].filter(Boolean).join(' · ');
-  } else if (types.includes('JobPosting')) {
-    kind.textContent = 'Job';
-    title.textContent = readText(data.title) || 'Job posting';
-    snippet.textContent = [readText(data.hiringOrganization), readText(data.jobLocation)].filter(Boolean).join(' · ');
-  } else {
-    return null;
-  }
-
-  card.prepend(kind);
-  card.append(cite, title, snippet);
-  if (meta.textContent) card.append(meta);
-  return card;
-}
-
-function renderSerp() {
-  const pane = $('view-serp');
-  if (!pane) return;
-  pane.replaceChildren();
-  const entities = report?.entities ?? [];
-  const cards = [];
-  const seen = new Set();
-  for (const entity of entities) {
-    const key = entity.types.find((t) =>
-      ['Product', 'Recipe', 'NewsArticle', 'Article', 'BlogPosting', 'BreadcrumbList', 'Event', 'JobPosting'].includes(t),
-    );
-    if (!key || seen.has(`${key}:${entity.id}`)) continue;
-    const card = buildSerpCard(entity);
-    if (!card) continue;
-    seen.add(`${key}:${entity.id}`);
-    cards.push(card);
-  }
-  if (cards.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'serp-empty';
-    empty.textContent = 'No Product, Article, Recipe, Breadcrumb, Event, or Job entities to preview.';
-    pane.append(empty);
-    return;
-  }
-  for (const card of cards) pane.append(card);
-}
-
-function render() {
-  renderScore();
-  renderEntities();
-  if (activeView === 'findings') renderAllFindings();
-  else if (activeView === 'serp') renderSerp();
-  else renderDetail();
-}
-
-/**
- * @param {{ id: string; format: string; sourceIndex: number }} entity
+ * @param {{ id: string; format: string; sourceIndex: number; types?: string[] }} entity
  */
 async function inspectEntity(entity) {
   if (!snapshot) return;
@@ -837,7 +344,7 @@ async function inspectEntity(entity) {
       setStatus('The schema source node is no longer in the document', true);
       return;
     }
-    setStatus(`Opened ${entity.types.join(', ') || entity.id} in Elements`);
+    setStatus(`Opened ${entity.types?.join(', ') || entity.id} in Elements`);
     highlightEntity(entity);
   } catch (err) {
     setStatus(err instanceof Error ? err.message : 'Inspect failed', true);
@@ -881,40 +388,22 @@ function openExternal(url) {
   setStatus('Opened external validator');
 }
 
-function setupTabs() {
-  document.querySelectorAll('.tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      const view = /** @type {'tree' | 'raw' | 'findings' | 'serp'} */ (tab.getAttribute('data-view'));
-      activeView = view;
-      document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-      document.querySelectorAll('.view-pane').forEach((pane) => {
-        pane.classList.toggle('active', pane.id === `view-${view}`);
-      });
-      if (view === 'findings') renderAllFindings();
-      else if (view === 'serp') renderSerp();
-      else renderDetail();
-    });
-  });
-}
-
-function setupActions() {
-  $('btn-refresh').addEventListener('click', () => {
+function bindActions() {
+  actions.refresh = () => {
     analyze().catch((err) => setStatus(err instanceof Error ? err.message : 'Refresh failed', true));
-  });
-
-  $('btn-inspect').addEventListener('click', () => {
-    const entity = report?.entities.find((e) => e.id === selectedEntityId);
+  };
+  actions.selectEntity = selectEntity;
+  actions.highlightEntity = highlightEntity;
+  actions.inspectSelected = () => {
+    const entity = selectedEntity();
     if (!entity) {
       setStatus('Select an entity to inspect in Elements', true);
       return;
     }
     inspectEntity(entity);
-  });
-
-  $('search').addEventListener('input', () => render());
-
-  $('btn-copy-json').addEventListener('click', () => {
-    const entity = report?.entities.find((e) => e.id === selectedEntityId);
+  };
+  actions.copyJson = () => {
+    const entity = selectedEntity();
     if (entity) {
       copyText(JSON.stringify(entity.data, null, 2));
       return;
@@ -923,11 +412,10 @@ function setupActions() {
       setStatus('No JSON to copy', true);
       return;
     }
-    const parsed = snapshot.jsonld.map((b) => b.parsed).filter((p) => p !== null);
+    const parsed = snapshot.jsonld.map((block) => block.parsed).filter((item) => item !== null);
     copyText(JSON.stringify(parsed.length === 1 ? parsed[0] : parsed, null, 2));
-  });
-
-  $('btn-copy-script').addEventListener('click', () => {
+  };
+  actions.copyScript = () => {
     if (!snapshot?.jsonld?.length) {
       setStatus('No JSON-LD blocks to copy', true);
       return;
@@ -936,9 +424,8 @@ function setupActions() {
       .map((block) => `<script type="application/ld+json">\n${block.raw}\n</script>`)
       .join('\n\n');
     copyText(tags);
-  });
-
-  $('btn-download').addEventListener('click', () => {
+  };
+  actions.downloadJson = () => {
     if (!agentBundle) {
       setStatus('No report to download', true);
       return;
@@ -950,41 +437,37 @@ function setupActions() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 0);
     setStatus('Downloaded schema-report.json');
-  });
-
-  $('btn-copy-bundle').addEventListener('click', () => {
+  };
+  actions.copyBundle = () => {
     if (!agentBundle) {
       setStatus('No agent bundle to copy', true);
       return;
     }
     copyText(JSON.stringify(agentBundle, null, 2));
-  });
-
-  $('btn-copy-markdown').addEventListener('click', () => {
+  };
+  actions.copyMarkdown = () => {
     if (!agentBundle) {
       setStatus('No agent markdown to copy', true);
       return;
     }
     copyText(toAgentMarkdown(agentBundle));
-  });
-
-  $('btn-rich-results').addEventListener('click', () => {
+  };
+  actions.openRichResults = () => {
     const url = getPageUrl();
     if (!url) {
       setStatus('No page URL available', true);
       return;
     }
     openExternal(`https://search.google.com/test/rich-results?url=${encodeURIComponent(url)}`);
-  });
-
-  $('btn-schema-validator').addEventListener('click', () => {
+  };
+  actions.openSchemaValidator = () => {
     const url = getPageUrl();
     if (!url) {
       setStatus('No page URL available', true);
       return;
     }
     openExternal(`https://validator.schema.org/#url=${encodeURIComponent(url)}`);
-  });
+  };
 }
 
 async function startPageWatch() {
@@ -1018,15 +501,17 @@ async function pollPageWatch() {
 
 function init() {
   try {
+    bindActions();
     applyTheme();
+    mountPanel(document.getElementById('app'));
     chrome.devtools.panels.setThemeChangeHandler?.(applyTheme);
-    chrome.devtools.network.onNavigated.addListener(() => {
+    listen(chrome.devtools.network?.onNavigated, () => {
       stopPageWatch();
       analyze()
         .then(() => startPageWatch())
         .catch((err) => showFatal(err instanceof Error ? err.message : 'Navigation analysis failed'));
     });
-    chrome.runtime.onMessage.addListener((message) => {
+    listen(chrome.runtime?.onMessage, (message) => {
       if (message?.type !== 'schema-panel-visibility') return;
       panelVisible = Boolean(message.visible);
       if (!panelVisible) {
@@ -1038,8 +523,6 @@ function init() {
       }
     });
     window.addEventListener('pagehide', stopPageWatch);
-    setupTabs();
-    setupActions();
     analyze()
       .then(() => startPageWatch())
       .catch((err) => showFatal(err instanceof Error ? err.message : 'Initial analysis failed'));
