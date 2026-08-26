@@ -1,6 +1,6 @@
 # Schema DevTools
 
-A Chrome DevTools extension for inspecting, debugging, validating, and scoring structured data (**JSON-LD**, **Microdata**, **RDFa**) on any web page. 
+A lightweight Chrome DevTools extension for inspecting, debugging, validating, and scoring structured data (**JSON-LD**, **Microdata**, **RDFa**) on any web page. 
 
 All analysis runs **100% locally in your browser** — zero host permissions, zero telemetry, and nothing is sent to external servers unless you explicitly click the Google Rich Results Test or Schema Markup Validator links.
 
@@ -11,15 +11,16 @@ All analysis runs **100% locally in your browser** — zero host permissions, ze
 - 🛠️ **Dedicated DevTools Panel** — Adds a **Schema** tab to Chrome DevTools for comprehensive page-level structured data inspection.
 - 🔍 **Elements Sidebar Pane** — Inspect elements directly in the **Elements** panel with a synced **Schema** sidebar showing markup and properties on the selected DOM node (`$0`).
 - 📊 **Quality Score & Findings** — 0–100 quality score with real-time error, warning, and info breakdowns against Schema.org and Google Search Central rich-result guidelines.
-- 🌳 **Entity Browser & Views:**
+- 🌳 **Interactive Views & Workspaces:**
   - **Tree View** — Interactive, collapsible tree view with syntax color-coding and `@id` graph navigation links.
-  - **Raw JSON View** — Formatted JSON-LD payload with line/column syntax error indicators.
+  - **Raw JSON Sandbox** — In-panel interactive JSON editor (`✏️ Edit & Test Fixes`) with live syntax checking and real-time score recalculation.
   - **Findings View** — Filterable list of validation findings with direct documentation links.
-  - **SERP Preview** — Non-authoritative Google Search card simulation for Products, Articles, Recipes, and Breadcrumbs.
+  - **SERP Preview** — Google Search rich preview simulations for `Product`, `Recipe`, `Article`, `Event`, `Job`, `ProfilePage`, and `LocalBusiness` / `Restaurant` / `Store`.
+  - **Knowledge Graph** — Visual entity relationship graph showing `@id` connections and orphaned standalone entities.
 - ⚡ **Live SPA & Mutation Updates** — Automatically detects dynamic schema changes, client-side route changes (Next.js, Nuxt, Shopify, React), and DOM mutations.
 - 🎯 **In-Page DOM Highlighting** — Hovering or clicking an entity outlines its corresponding visual DOM node on the live webpage.
 - 🧭 **Inspect in Elements** — Optional reveal of the source node in the Elements panel (button or Alt-click). Ordinary clicks stay on the Schema tab.
-- 🤖 **AI Agent & LLM Exports** — One-click **Copy Agent Bundle** (structured JSON) and **Copy Agent Markdown** for seamless integration with Claude, Cursor, Copilot, and LLM coding assistants.
+- 🤖 **AI & GEO (Generative Engine Optimization) Readiness** — One-click **Copy for AI Prompt**, **Copy Agent Bundle** (JSON), and **Copy Agent Markdown** for seamless integration with LLMs and AI search engines.
 - 🔗 **External Validators** — Direct one-click links to Google Rich Results Test and `validator.schema.org` (opens with encoded page URL only on explicit click).
 - 🌓 **Native Theme Parity** — Uses Chrome DevTools system colors and follows the `default` / `dark` theme.
 
@@ -35,6 +36,39 @@ All analysis runs **100% locally in your browser** — zero host permissions, ze
 6. Select the **Schema** tab in DevTools.
 
 > **Tip:** If you make changes to extension files, click **Reload** on the extension card in `chrome://extensions` and reopen DevTools.
+
+---
+
+## 💻 Local Development & Sandbox
+
+You can develop and test the UI without loading unpacked extensions into Chrome DevTools:
+
+```bash
+# Start the local browser sandbox testbed
+npm run dev
+# 👉 Open http://localhost:3333 in your browser
+```
+
+Switch between realistic mock fixtures (E-Commerce, Multi-Author Article, Restaurant Knowledge Graph, Deprecated Schema) with live score validation and theme toggling.
+
+---
+
+## 🧪 CLI Validator & Tests
+
+### Validate any File or URL from Terminal
+```bash
+# Validate a local JSON-LD file
+npm run validate ./path/to/schema.json
+
+# Validate a live website directly
+npm run validate https://example.com/product
+```
+
+### Run Full Test Suite
+```bash
+# Runs bundle engine, smoke checks, rule audits, and security guardrails
+npm test
+```
 
 ---
 
@@ -58,61 +92,58 @@ schema/
 ├── privacy.html             # Local-only privacy policy
 ├── README.md                # Project documentation
 ├── STORE.md                 # Chrome Web Store listing metadata
-├── vendor/                  # Vendored ArrowJS runtime (no CDN)
-├── ui/                      # ArrowJS store, views, and theme
-│   ├── store.js
-│   ├── app.js
-│   ├── sidebar.js
-│   └── theme.css
-├── devtools/                # Chrome DevTools host pages
+├── dev/                     # Standalone local development sandbox
+│   ├── index.html           # Browser testbed for rapid UI development
+│   └── fixtures.js          # Realistic mock schema fixtures
+├── vendor/                  # Vendored VanJS 1.6.1 & VanX 0.6.3 (zero-build)
+│   ├── van.js
+│   └── van-x.js
+├── ui/                      # Modular VanJS reactive UI
+│   ├── store.js             # VanX deep reactive proxy store & actions
+│   ├── app.js               # Top-level panel layout orchestrator
+│   ├── sidebar.js           # Elements sidebar pane component
+│   ├── theme.css            # Chrome DevTools system color tokens
+│   ├── components/          # Reusable UI components
+│   │   ├── toolbar.js       # Main header toolbar & export menu
+│   │   ├── score-card.js    # Quality score ring & error badges
+│   │   └── entity-list.js   # Left master entity sidebar pane
+│   └── views/               # Dedicated workspace views
+│       ├── tree.js          # Recursive monospace tree inspector
+│       ├── raw.js           # Raw JSON view & sandbox editor
+│       ├── findings.js      # Validation findings list & severity badges
+│       ├── serp.js          # Google SERP rich preview cards
+│       └── graph.js         # Visual entity knowledge graph
+├── devtools/                # Chrome DevTools host integration
 │   ├── devtools.html        # Entrypoint initializing Schema panel & Elements sidebar
 │   ├── devtools.js
-│   ├── panel.html           # Main Schema DevTools panel UI
-│   ├── panel.js
-│   ├── panel.css
-│   ├── sidebar.html         # Elements panel Schema sidebar pane
-│   ├── sidebar.js
+│   ├── panel.html           # Main Schema DevTools panel container
+│   ├── panel.js             # Host eval, theme sync, SPA mutation poller
+│   ├── panel.css            # Styles for panel, SERP, graph, and sandbox
+│   ├── sidebar.html         # Elements panel Schema sidebar container
+│   ├── sidebar.js           # $0 DOM inspection host
 │   └── sidebar.css
 ├── src/                     # Core extraction, validation & scoring engine
+│   ├── catalog/             # Modular declarative rule definitions
+│   │   ├── rich-results.js  # 23 Google Search gallery rules
+│   │   ├── deprecations.js  # Deprecated Schema.org types
+│   │   └── syntax.js        # Strict JSON-LD syntax validators
 │   ├── extract.js           # In-page DOM snapshot & metadata extraction
 │   ├── normalize.js         # Flattening & entity normalization
-│   ├── rules.js             # Google rich-result & Schema.org rule catalog
+│   ├── rules.js             # Catalog loader & rule aggregation
 │   ├── validate.js          # Findings & validation engine
 │   ├── score.js             # 0–100 quality scoring algorithm
 │   ├── agent.js             # AI agent JSON bundle & markdown export builders
 │   └── types.js             # JSDoc type definitions
-├── scripts/                 # Build & smoke verification scripts
+├── scripts/                 # CLI & automation tooling
+│   ├── dev.mjs              # Zero-dependency local dev server
+│   ├── test.mjs             # Unified test suite runner
+│   ├── validate-cli.mjs     # Terminal CLI schema validator
+│   ├── audit-rules.mjs      # Automated catalog rule auditor
 │   ├── bundle-engine.mjs    # Engine bundler for classic DevTools script
-│   ├── smoke-engine.mjs     # Smoke tests for engine logic
-│   └── smoke-panel.mjs      # Panel selection, theme, and ArrowJS smoke tests
+│   ├── smoke-engine.mjs     # Engine extraction/score smoke tests
+│   └── smoke-panel.mjs      # Panel UI & selection smoke tests
 └── icons/                   # Extension icons (16px, 32px, 48px, 128px)
 ```
-
----
-
-## 🧪 Development & Testing
-
-Run smoke tests for the extraction, normalization, validation, and scoring engine:
-
-```bash
-# Run smoke tests
-node scripts/smoke-engine.mjs
-node scripts/smoke-panel.mjs
-
-# Rebuild classic bundle after modifying files in src/
-node scripts/bundle-engine.mjs
-```
-
----
-
-## 📦 Chrome Web Store Checklist
-
-- [x] Manifest V3 compliant (`devtools_page` only)
-- [x] Zero host permissions declared
-- [x] 100% local analysis verified
-- [x] Privacy policy ready in `privacy.html`
-- [x] Listing copy prepared in `STORE.md`
-- [x] Icons ready in `icons/` (16, 32, 48, 128px)
 
 ---
 

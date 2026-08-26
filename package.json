@@ -2,10 +2,13 @@
   "name": "schema-devtools",
   "private": true,
   "type": "module",
-  "description": "Local tooling for Schema DevTools. Runtime UI uses vendored VanJS and VanX in vendor/.",
+  "description": "Schema DevTools — Chrome DevTools Extension for Structured Data (Schema.org / JSON-LD / Microdata / RDFa).",
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test": "node scripts/test.mjs",
+    "validate": "node scripts/validate-cli.mjs",
     "bundle": "node scripts/bundle-engine.mjs",
-    "smoke": "node scripts/smoke-engine.mjs && node scripts/smoke-panel.mjs"
+    "audit:rules": "node scripts/audit-rules.mjs"
   },
   "dependencies": {
     "vanjs-core": "1.6.1",

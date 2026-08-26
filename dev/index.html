@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schema DevTools — Local Dev Sandbox</title>
+  <link rel="stylesheet" href="../ui/theme.css">
+  <link rel="stylesheet" href="../devtools/panel.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: var(--sys-color-base);
+      color: var(--sys-color-on-surface);
+      font-family: var(--dt-font-sans);
+    }
+    .dev-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 14px;
+      background: #1f1f1f;
+      border-bottom: 1px solid #333;
+      color: #e0e0e0;
+      font-size: 12px;
+      z-index: 100;
+    }
+    .dev-badge {
+      background: #ff4757;
+      color: #fff;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      text-transform: uppercase;
+      margin-right: 8px;
+    }
+    .dev-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dev-select {
+      background: #2a2a2a;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .dev-btn {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .dev-btn:hover {
+      background: #444;
+    }
+    #app-container {
+      flex: 1;
+      height: calc(100vh - 38px);
+      width: 100%;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <div class="dev-banner">
+    <div style="display: flex; align-items: center;">
+      <span class="dev-badge">Local Dev</span>
+      <strong>Schema DevTools Sandbox</strong>
+      <span style="margin-left: 12px; color: #888;">Zero-build VanJS testbed</span>
+    </div>
+    <div class="dev-controls">
+      <label for="fixture-select">Fixture:</label>
+      <select id="fixture-select" class="dev-select">
+        <option value="e-commerce">E-Commerce Product</option>
+        <option value="article">Multi-Author Article</option>
+        <option value="restaurant">Restaurant & LocalBusiness</option>
+        <option value="deprecated">Deprecated HowTo Schema</option>
+      </select>
+      <button type="button" id="theme-btn" class="dev-btn">🌙 Dark Mode</button>
+    </div>
+  </div>
+
+  <div id="app-container">
+    <div id="app" style="height: 100%; width: 100%;"></div>
+  </div>
+
+  <!-- Load Schema Engine -->
+  <script src="../devtools/engine.classic.js"></script>
+
+  <!-- Mount Sandbox App -->
+  <script type="module">
+    import { mountPanel } from '../ui/app.js';
+    import { store, actions } from '../ui/store.js';
+    import { FIXTURES } from './fixtures.js';
+
+    const engine = globalThis.SchemaDT || {};
+
+    function loadFixture(key) {
+      const fixture = FIXTURES[key] || FIXTURES['e-commerce'];
+      store.snapshotUrl = fixture.url;
+      store.snapshotCanonical = fixture.canonical;
+      store.entities = fixture.entities;
+      store.selectedEntityId = fixture.entities[0]?.id || null;
+
+      // Run engine validation and scoring
+      if (typeof engine.validate === 'function' && typeof engine.score === 'function') {
+        const dummySnapshot = { url: fixture.url, canonical: fixture.canonical, jsonld: [], microdata: [], rdfa: [] };
+        store.findings = engine.validate(dummySnapshot, fixture.entities);
+        store.score = engine.score(store.findings, fixture.entities);
+      } else {
+        store.findings = [];
+        store.score = { total: 100, label: 'excellent', errorCount: 0, warningCount: 0 };
+      }
+
+      store.status = `Loaded fixture "${fixture.name}" (${fixture.entities.length} entities)`;
+      store.statusError = false;
+    }
+
+    // Initialize Mock DevTools actions
+    actions.refresh = () => {
+      const select = document.getElementById('fixture-select');
+      loadFixture(select.value);
+    };
+
+    actions.inspectSelected = (id) => {
+      const entityId = id || store.selectedEntityId;
+      console.log('🎯 [Mock DevTools] Reveal in Elements:', entityId);
+      store.status = `[Mock Elements] Inspected ${entityId}`;
+    };
+
+    actions.highlightEntity = (entity) => {
+      // Mock highlight
+    };
+
+    actions.selectEntity = (entity, options = {}) => {
+      store.selectedEntityId = entity.id;
+      if (options.inspect) actions.inspectSelected(entity.id);
+    };
+
+    // Wire Theme Toggle
+    const themeBtn = document.getElementById('theme-btn');
+    themeBtn.addEventListener('click', () => {
+      const isDark = store.theme === 'dark';
+      store.theme = isDark ? 'default' : 'dark';
+      document.documentElement.setAttribute('data-theme', store.theme);
+      themeBtn.textContent = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
+    });
+
+    // Wire Fixture Selector
+    const fixtureSelect = document.getElementById('fixture-select');
+    fixtureSelect.addEventListener('change', (e) => {
+      loadFixture(e.target.value);
+    });
+
+    // Mount UI
+    mountPanel(document.getElementById('app'));
+    loadFixture('e-commerce');
+  </script>
+</body>
+</html>
