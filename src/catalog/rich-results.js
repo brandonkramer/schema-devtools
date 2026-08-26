@@ -20,14 +20,14 @@ export const LOCAL_BUSINESS_TYPES = new Set([
   'HealthClub', 'HobbyShop', 'HomeAndConstructionBusiness', 'Hostel', 'Hotel',
   'HVACBusiness', 'IceCreamShop', 'InsuranceAgency', 'InternetCafe', 'JewelryStore',
   'LegalService', 'Library', 'LiquorStore', 'LodgingBusiness', 'Locksmith',
-  'MedicalBusiness', 'MensClothingStore', 'MiddleSchool', 'Motel', 'MotorcycleDealer',
+  'MedicalBusiness', 'MensClothingStore', 'Motel', 'MotorcycleDealer',
   'MovieTheater', 'MovingCompany', 'MusicStore', 'NightClub', 'Notary',
   'OfficeEquipmentStore', 'Optician', 'OutletStore', 'PawnShop', 'PetStore', 'Pharmacy',
-  'Plumber', 'PoliceStation', 'PostOffice', 'Preschool', 'ProfessionalService',
+  'Plumber', 'PoliceStation', 'PostOffice', 'ProfessionalService',
   'RadioStation', 'RealEstateAgent', 'RecyclingCenter', 'Resort', 'Restaurant',
   'RoofingContractor', 'SelfStorage', 'ShoeStore', 'ShoppingCenter', 'SkiResort',
   'SportingGoodsStore', 'SportsActivityLocation', 'Store', 'TattooParlor',
-  'TelevisionStation', 'TireShop', 'TouristAttraction', 'TouristInformationCenter',
+  'TelevisionStation', 'TireShop', 'TouristInformationCenter',
   'ToyStore', 'TravelAgency', 'WholesaleStore',
 ]);
 
@@ -54,6 +54,7 @@ export const RICH_RESULT_RULES = [
   {
     type: 'Product',
     required: ['name'],
+    anyOf: [['offers', 'review', 'aggregateRating']],
     recommended: ['image', 'description', 'offers', 'brand', 'sku', 'aggregateRating', 'review'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/product',
   },
@@ -65,7 +66,7 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'Event',
-    required: ['name', 'startDate', 'location'],
+    required: ['name', 'startDate', 'location', 'location.address'],
     recommended: ['endDate', 'description', 'image', 'offers', 'performer', 'organizer'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/event',
   },
@@ -77,7 +78,8 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'JobPosting',
-    required: ['title', 'description', 'datePosted', 'hiringOrganization'],
+    required: ['title', 'description', 'datePosted', 'hiringOrganization', 'hiringOrganization.name'],
+    anyOf: [['jobLocation', 'applicantLocationRequirements']],
     recommended: ['jobLocation', 'baseSalary', 'employmentType', 'validThrough'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/job-posting',
   },
@@ -95,8 +97,8 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'VideoObject',
-    required: ['name', 'description', 'thumbnailUrl', 'uploadDate'],
-    recommended: ['contentUrl', 'duration', 'embedUrl'],
+    required: ['name', 'thumbnailUrl', 'uploadDate'],
+    recommended: ['contentUrl', 'description', 'duration', 'embedUrl'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/video',
   },
   {
@@ -114,7 +116,7 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'Review',
-    required: ['itemReviewed', 'reviewRating', 'author'],
+    required: ['itemReviewed', 'itemReviewed.name', 'reviewRating', 'reviewRating.ratingValue', 'author', 'author.name'],
     recommended: ['datePublished', 'reviewBody'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
   },
@@ -132,13 +134,13 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'DiscussionForumPosting',
-    required: ['author', 'datePublished'],
+    required: ['author', 'author.name', 'datePublished'],
     recommended: ['url', 'comment'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/discussion-forum',
   },
   {
     type: 'SocialMediaPosting',
-    required: ['author', 'datePublished'],
+    required: ['author', 'author.name', 'datePublished'],
     recommended: ['url', 'comment'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/discussion-forum',
   },

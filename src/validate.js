@@ -47,6 +47,39 @@ function isLocalBusiness(types) {
 }
 
 /**
+ * Check a property path while following local JSON-LD @id references.
+ * @param {Record<string, unknown>} data
+ * @param {string} path
+ * @param {Entity[]} entities
+ */
+function hasEntityPropertyPath(data, path, entities) {
+  if (hasPropertyPath(data, path)) return true;
+  const parts = path.split('.').filter(Boolean);
+  if (parts.length === 0) return false;
+  return visit(data, 0, 0, new Set());
+
+  function visit(value, index, depth, seen) {
+    if (depth > 50 || value === null || value === undefined) return false;
+    if (Array.isArray(value)) return value.some((item) => visit(item, index, depth + 1, seen));
+    if (typeof value !== 'object') return false;
+    const obj = /** @type {Record<string, unknown>} */ (value);
+    const child = obj[parts[index]];
+    if (child !== undefined) {
+      return index === parts.length - 1
+        ? hasProperty({ value: child }, 'value')
+        : visit(child, index + 1, depth + 1, seen);
+    }
+    const ref = obj['@id'];
+    if (typeof ref !== 'string' || seen.has(ref)) return false;
+    const target = entities.find((entity) => entity.id === ref || entity.data['@id'] === ref);
+    if (!target) return false;
+    const nextSeen = new Set(seen);
+    nextSeen.add(ref);
+    return visit(target.data, index, depth + 1, nextSeen);
+  }
+}
+
+/**
  * Check if author name appears packed with commas (multiple authors in one string).
  * @param {Record<string, unknown>} data
  * @returns {boolean}
@@ -155,9 +188,9 @@ function validateBreadcrumbStructure(data) {
 
   if (items.length < 2) {
     findings.push({
-      severity: 'warning',
+      severity: 'error',
       code: 'BREADCRUMB_TOO_SHORT',
-      message: 'BreadcrumbList should have at least 2 ListItem elements.',
+      message: 'BreadcrumbList requires at least 2 ListItem elements for Google breadcrumb eligibility.',
       path: 'itemListElement',
     });
   }
@@ -165,7 +198,7 @@ function validateBreadcrumbStructure(data) {
   items.forEach((item, i) => {
     if (typeof item !== 'object' || item === null) return;
     const li = /** @type {Record<string, unknown>} */ (item);
-    if (!hasProperty(li, 'name')) {
+    if (!hasProperty(li, 'name') && !hasPropertyPath(li, 'item.name')) {
       findings.push({
         severity: 'error',
         code: 'BREADCRUMB_MISSING_NAME',
@@ -175,7 +208,7 @@ function validateBreadcrumbStructure(data) {
     }
     if (li.position === undefined) {
       findings.push({
-        severity: 'warning',
+        severity: 'error',
         code: 'BREADCRUMB_MISSING_POSITION',
         message: `Breadcrumb ListItem ${i + 1} is missing position.`,
         path: `itemListElement[${i}].position`,
@@ -183,7 +216,7 @@ function validateBreadcrumbStructure(data) {
     }
     if (i < items.length - 1 && !hasProperty(li, 'item')) {
       findings.push({
-        severity: 'warning',
+        severity: 'error',
         code: 'BREADCRUMB_MISSING_ITEM',
         message: `Breadcrumb ListItem ${i + 1} is missing item URL.`,
         path: `itemListElement[${i}].item`,
@@ -236,11 +269,11 @@ function validateJobPosting(data) {
   const org = data.hiringOrganization;
   if (typeof org === 'object' && org !== null) {
     const o = /** @type {Record<string, unknown>} */ (org);
-    if (!hasProperty(o, 'name') && !hasProperty(o, 'sameAs')) {
+    if (!hasProperty(o, 'name')) {
       findings.push({
-        severity: 'warning',
+        severity: 'error',
         code: 'JOB_MISSING_ORG_NAME',
-        message: 'JobPosting hiringOrganization should include name or sameAs.',
+        message: 'JobPosting hiringOrganization requires name.',
         path: 'hiringOrganization.name',
       });
     }
@@ -259,15 +292,48 @@ function validateQAPage(data) {
   const main = data.mainEntity;
   if (!main) return findings;
   const items = Array.isArray(main) ? main : [main];
+  if (items.length !== 1) {
+    findings.push({
+      severity: 'error',
+      code: 'QA_INVALID_QUESTION_COUNT',
+      message: 'QAPage must contain exactly one Question under mainEntity.',
+      path: 'mainEntity',
+    });
+  }
   items.forEach((item, i) => {
-    if (typeof item !== 'object' || item === null) return;
+    if (typeof item !== 'object' || item === null) {
+      findings.push({
+        severity: 'error',
+        code: 'QA_INVALID_QUESTION',
+        message: `QAPage mainEntity ${i + 1} must be a Question object.`,
+        path: `mainEntity[${i}]`,
+      });
+      return;
+    }
     const q = /** @type {Record<string, unknown>} */ (item);
+    const questionTypes = Array.isArray(q['@type']) ? q['@type'] : q['@type'] ? [q['@type']] : [];
+    if (!questionTypes.some((type) => String(type).endsWith('Question'))) {
+      findings.push({
+        severity: 'error',
+        code: 'QA_INVALID_QUESTION',
+        message: `QAPage mainEntity ${i + 1} must have @type Question.`,
+        path: `mainEntity[${i}].@type`,
+      });
+    }
     if (!hasProperty(q, 'name')) {
       findings.push({
         severity: 'error',
         code: 'QA_MISSING_QUESTION_NAME',
         message: `QAPage Question ${i + 1} is missing name.`,
         path: `mainEntity[${i}].name`,
+      });
+    }
+    if (!hasProperty(q, 'answerCount')) {
+      findings.push({
+        severity: 'error',
+        code: 'QA_MISSING_ANSWER_COUNT',
+        message: `QAPage Question ${i + 1} is missing answerCount.`,
+        path: `mainEntity[${i}].answerCount`,
       });
     }
     if (!q.acceptedAnswer && !q.suggestedAnswer) {
@@ -278,8 +344,126 @@ function validateQAPage(data) {
         path: `mainEntity[${i}]`,
       });
     }
+    for (const [property, rawAnswers] of [['acceptedAnswer', q.acceptedAnswer], ['suggestedAnswer', q.suggestedAnswer]]) {
+      const answers = Array.isArray(rawAnswers) ? rawAnswers : rawAnswers ? [rawAnswers] : [];
+      answers.forEach((answer, answerIndex) => {
+        if (typeof answer !== 'object' || answer === null || !hasProperty(/** @type {Record<string, unknown>} */ (answer), 'text')) {
+          findings.push({
+            severity: 'error',
+            code: 'QA_ANSWER_MISSING_TEXT',
+            message: `QAPage ${property} ${answerIndex + 1} is missing text.`,
+            path: `mainEntity[${i}].${property}[${answerIndex}].text`,
+          });
+        }
+      });
+    }
   });
   return findings;
+}
+
+/**
+ * Validate Google carousel ItemList structure.
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateItemList(data) {
+  /** @type {Finding[]} */
+  const findings = [];
+  const rawItems = data.itemListElement;
+  const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
+  if (items.length < 2) {
+    findings.push({
+      severity: 'error',
+      code: 'CAROUSEL_TOO_SHORT',
+      message: 'Google carousel ItemList markup requires at least two ListItem elements.',
+      path: 'itemListElement',
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/carousel',
+    });
+  }
+  const itemTypes = new Set();
+  items.forEach((item, index) => {
+    const path = `itemListElement[${index}]`;
+    if (typeof item !== 'object' || item === null) {
+      findings.push({
+        severity: 'error',
+        code: 'CAROUSEL_INVALID_LIST_ITEM',
+        message: `Carousel item ${index + 1} must be a ListItem object.`,
+        path,
+      });
+      return;
+    }
+    const listItem = /** @type {Record<string, unknown>} */ (item);
+    if (!hasProperty(listItem, 'position')) {
+      findings.push({
+        severity: 'error',
+        code: 'CAROUSEL_MISSING_POSITION',
+        message: `Carousel ListItem ${index + 1} is missing position.`,
+        path: `${path}.position`,
+      });
+    }
+    if (!hasProperty(listItem, 'url') && !hasProperty(listItem, 'item')) {
+      findings.push({
+        severity: 'error',
+        code: 'CAROUSEL_MISSING_ITEM',
+        message: `Carousel ListItem ${index + 1} requires url or item.`,
+        path,
+      });
+    }
+    if (hasProperty(listItem, 'item')) {
+      if (!hasPropertyPath(listItem, 'item.name')) {
+        findings.push({
+          severity: 'error',
+          code: 'CAROUSEL_MISSING_ITEM_NAME',
+          message: `Carousel ListItem ${index + 1} item is missing name.`,
+          path: `${path}.item.name`,
+        });
+      }
+      if (!hasPropertyPath(listItem, 'item.url')) {
+        findings.push({
+          severity: 'error',
+          code: 'CAROUSEL_MISSING_ITEM_URL',
+          message: `Carousel ListItem ${index + 1} item is missing url.`,
+          path: `${path}.item.url`,
+        });
+      }
+      const nested = listItem.item;
+      if (typeof nested === 'object' && nested !== null) {
+        const type = /** @type {Record<string, unknown>} */ (nested)['@type'];
+        const typeList = Array.isArray(type) ? type : type ? [type] : [];
+        typeList.forEach((value) => itemTypes.add(String(value).replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, '')));
+      }
+    }
+  });
+  if (itemTypes.size > 1) {
+    findings.push({
+      severity: 'error',
+      code: 'CAROUSEL_MIXED_ITEM_TYPES',
+      message: 'All items in a Google carousel ItemList must be of the same type.',
+      path: 'itemListElement',
+    });
+  }
+  return findings;
+}
+
+/**
+ * Validate nested Product variants when they are present on a ProductGroup.
+ * @param {Record<string, unknown>} data
+ * @returns {Finding[]}
+ */
+function validateProductGroup(data) {
+  const rawVariants = data.hasVariant;
+  const variants = Array.isArray(rawVariants) ? rawVariants : rawVariants ? [rawVariants] : [];
+  if (variants.length === 0 || hasProperty(data, 'productGroupID')) return [];
+  if (variants.some((variant) => {
+    return typeof variant === 'object' && variant !== null && hasProperty(/** @type {Record<string, unknown>} */ (variant), 'inProductGroupWithID');
+  })) return [];
+  return [{
+    severity: 'error',
+    code: 'PRODUCT_GROUP_MISSING_ID',
+    message: 'ProductGroup requires productGroupID or inProductGroupWithID on its variants.',
+    path: 'productGroupID',
+    docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/product-variants',
+  }];
 }
 
 /**
@@ -462,6 +646,14 @@ function validateRatingObject(rating, path) {
       path: `${path}.ratingValue`,
     });
   }
+  if (path.endsWith('aggregateRating') && !hasProperty(rating, 'ratingCount') && !hasProperty(rating, 'reviewCount')) {
+    findings.push({
+      severity: 'error',
+      code: 'RATING_MISSING_COUNT',
+      message: `Aggregate rating at ${path} requires ratingCount or reviewCount.`,
+      path,
+    });
+  }
   return findings;
 }
 
@@ -469,7 +661,7 @@ function validateRatingObject(rating, path) {
  * @param {Entity} entity
  * @returns {Finding[]}
  */
-function validateEntity(entity) {
+function validateEntity(entity, entities) {
   /** @type {Finding[]} */
   const findings = [];
   const { types, data, id, format } = entity;
@@ -526,7 +718,7 @@ function validateEntity(entity) {
     return types.includes(candidate.type) || (candidate.type === 'LocalBusiness' && isLocalBusiness(types));
   })) {
     for (const req of rule.required) {
-      if (!hasPropertyPath(data, req)) {
+      if (!hasEntityPropertyPath(data, req, entities)) {
         pushFinding(findings, {
           severity: 'error',
           code: `MISSING_${req.replaceAll('.', '_').toUpperCase()}`,
@@ -538,7 +730,7 @@ function validateEntity(entity) {
       }
     }
     for (const rec of rule.recommended) {
-      if (!hasPropertyPath(data, rec)) {
+      if (!hasEntityPropertyPath(data, rec, entities)) {
         pushFinding(findings, {
           severity: 'info',
           code: `RECOMMENDED_${rec.replaceAll('.', '_').toUpperCase()}`,
@@ -550,7 +742,7 @@ function validateEntity(entity) {
       }
     }
     for (const alternatives of rule.anyOf ?? []) {
-      if (!alternatives.some((path) => hasPropertyPath(data, path))) {
+      if (!alternatives.some((path) => hasEntityPropertyPath(data, path, entities))) {
         pushFinding(findings, {
           severity: 'error',
           code: `MISSING_${alternatives.join('_OR_').toUpperCase()}`,
@@ -560,23 +752,6 @@ function validateEntity(entity) {
           docsUrl: rule.docsUrl,
         });
       }
-    }
-  }
-
-  if (types.includes('Product')) {
-    const hasOfferSignal =
-      hasProperty(data, 'offers') ||
-      hasProperty(data, 'review') ||
-      hasProperty(data, 'aggregateRating');
-    if (!hasOfferSignal) {
-      pushFinding(findings, {
-        severity: 'warning',
-        code: 'PRODUCT_MISSING_OFFER_OR_REVIEW',
-        message: 'Product should include offers, review, or aggregateRating to qualify for rich results.',
-        entityId: id,
-        path: 'offers',
-        docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/product',
-      });
     }
   }
 
@@ -616,6 +791,14 @@ function validateEntity(entity) {
 
   if (types.includes('QAPage')) {
     findings.push(...validateQAPage(data).map((f) => ({ ...f, entityId: id })));
+  }
+
+  if (types.includes('ItemList')) {
+    findings.push(...validateItemList(data).map((f) => ({ ...f, entityId: id })));
+  }
+
+  if (types.includes('ProductGroup')) {
+    findings.push(...validateProductGroup(data).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('DiscussionForumPosting') || types.includes('SocialMediaPosting')) {
@@ -804,7 +987,7 @@ export function validate(snapshot, entities) {
   }
 
   for (const entity of entities) {
-    findings.push(...validateEntity(entity));
+    findings.push(...validateEntity(entity, entities));
   }
 
   return findings;
