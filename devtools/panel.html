@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schema</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="header">
+    <div class="score-block">
+      <div class="score-ring" id="score-ring" aria-label="Schema score">
+        <span class="score-value" id="score-value">—</span>
+      </div>
+      <div class="score-meta">
+        <span class="score-label" id="score-label">Loading…</span>
+        <div class="counts">
+          <span class="count count-error" id="error-count" title="Errors">0 errors</span>
+          <span class="count count-warning" id="warning-count" title="Warnings">0 warnings</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <input type="search" id="search" class="search" placeholder="Search entities & findings…" autocomplete="off" spellcheck="false">
+      <div class="btn-row">
+        <button type="button" id="btn-refresh" class="btn">Refresh</button>
+        <button type="button" id="btn-copy-json" class="btn">Copy JSON</button>
+        <button type="button" id="btn-copy-script" class="btn">Copy script tag</button>
+        <button type="button" id="btn-download" class="btn">Download JSON</button>
+        <button type="button" id="btn-copy-bundle" class="btn">Copy agent bundle</button>
+        <button type="button" id="btn-copy-markdown" class="btn">Copy agent markdown</button>
+      </div>
+      <div class="btn-row external-links">
+        <button type="button" id="btn-rich-results" class="btn btn-link">Rich Results Test</button>
+        <button type="button" id="btn-schema-validator" class="btn btn-link">Schema Markup Validator</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="panel-section entities-section">
+      <h2 class="section-title">Entities <span class="badge" id="entity-count">0</span></h2>
+      <ul class="entity-list" id="entity-list"></ul>
+      <p class="empty-state hidden" id="entities-empty">No schema entities found on this page.</p>
+    </section>
+
+    <section class="panel-section detail-section">
+      <div class="view-tabs">
+        <button type="button" class="tab active" data-view="tree">Tree</button>
+        <button type="button" class="tab" data-view="raw">Raw JSON</button>
+        <button type="button" class="tab" data-view="findings">Findings</button>
+        <button type="button" class="tab" data-view="serp">SERP Preview</button>
+      </div>
+      <div class="view-content">
+        <div class="view-pane active" id="view-tree"></div>
+        <pre class="view-pane" id="view-raw"></pre>
+        <ul class="findings-list view-pane" id="view-findings"></ul>
+        <div class="view-pane serp-pane" id="view-serp"></div>
+      </div>
+      <p class="empty-state" id="detail-empty">Select an entity to inspect its data.</p>
+    </section>
+  </main>
+
+  <footer class="status" id="status" role="status"></footer>
+
+  <script src="engine.classic.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
