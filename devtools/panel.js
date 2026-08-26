@@ -469,10 +469,44 @@ function bindActions() {
     copyText(aiPrompt);
     setStatus('Copied AI Prompt to clipboard');
   };
+  const isLocalUrl = (rawUrl) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return false;
+    try {
+      const parsed = new URL(rawUrl);
+      return (
+        parsed.hostname === 'localhost' ||
+        parsed.hostname === '127.0.0.1' ||
+        parsed.hostname === '::1' ||
+        parsed.protocol === 'file:' ||
+        parsed.hostname.endsWith('.local') ||
+        parsed.hostname.endsWith('.internal')
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const getFullSchemaSnippet = () => {
+    if (snapshot?.jsonld?.length) {
+      return snapshot.jsonld.map((b) => b.raw).join('\n\n');
+    }
+    if (store.entities.length) {
+      return JSON.stringify(store.entities.map((e) => e.data), null, 2);
+    }
+    return '';
+  };
+
   actions.openRichResults = () => {
     const url = getPageUrl();
     if (!url) {
       setStatus('No page URL available', true);
+      return;
+    }
+    if (isLocalUrl(url)) {
+      const snippet = getFullSchemaSnippet();
+      if (snippet) copyText(snippet);
+      openExternal('https://search.google.com/test/rich-results');
+      setStatus('Localhost is not crawlable by Googlebot. Copied schema to clipboard for Code Snippet test.');
       return;
     }
     openExternal(`https://search.google.com/test/rich-results?url=${encodeURIComponent(url)}`);
@@ -481,6 +515,13 @@ function bindActions() {
     const url = getPageUrl();
     if (!url) {
       setStatus('No page URL available', true);
+      return;
+    }
+    if (isLocalUrl(url)) {
+      const snippet = getFullSchemaSnippet();
+      if (snippet) copyText(snippet);
+      openExternal('https://validator.schema.org/#code=');
+      setStatus('Localhost is not crawlable by Schema.org. Copied schema to clipboard for Code Snippet test.');
       return;
     }
     openExternal(`https://validator.schema.org/#url=${encodeURIComponent(url)}`);

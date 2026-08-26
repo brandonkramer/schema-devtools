@@ -168,6 +168,20 @@
       if (options.inspect) actions.inspectSelected(entity.id);
     };
 
+    actions.openRichResults = () => {
+      const code = JSON.stringify(store.entities.map((e) => e.data), null, 2);
+      if (navigator.clipboard) navigator.clipboard.writeText(code);
+      window.open('https://search.google.com/test/rich-results', '_blank');
+      store.status = 'Localhost sandbox is not publicly crawlable. Copied schema to clipboard for Code Snippet test.';
+    };
+
+    actions.openSchemaValidator = () => {
+      const code = JSON.stringify(store.entities.map((e) => e.data), null, 2);
+      if (navigator.clipboard) navigator.clipboard.writeText(code);
+      window.open('https://validator.schema.org/#code=', '_blank');
+      store.status = 'Localhost sandbox is not publicly crawlable. Copied schema to clipboard for Code Snippet test.';
+    };
+
     // Wire Theme Toggle
     const themeBtn = document.getElementById('theme-btn');
     themeBtn.addEventListener('click', () => {
