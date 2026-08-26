@@ -543,8 +543,9 @@ const RICH_RESULT_RULES = [
   },
   {
     type: 'SoftwareApplication',
-    required: ['name'],
-    recommended: ['operatingSystem', 'applicationCategory', 'offers', 'aggregateRating'],
+    required: ['name', 'offers.price'],
+    anyOf: [['aggregateRating', 'review']],
+    recommended: ['operatingSystem', 'applicationCategory'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
   },
   {
@@ -662,17 +663,40 @@ function matchRuleInCatalog(catalog, types) {
  */
 function hasProperty(data, prop) {
   return hasValue(data[prop]);
+}
 
-  /** @param {unknown} val */
-  function hasValue(val, depth = 0) {
-    if (depth > 50) return false;
-    if (val === undefined || val === null) return false;
-    if (typeof val === 'string' && val.trim() === '') return false;
-    if (Array.isArray(val)) return val.some((item) => hasValue(item, depth + 1));
-    if (typeof val === 'object') {
-      return Object.values(/** @type {Record<string, unknown>} */ (val)).some((item) => hasValue(item, depth + 1));
-    }
-    return true;
+/** @param {unknown} val */
+function hasValue(val, depth = 0) {
+  if (depth > 50) return false;
+  if (val === undefined || val === null) return false;
+  if (typeof val === 'string' && val.trim() === '') return false;
+  if (Array.isArray(val)) return val.some((item) => hasValue(item, depth + 1));
+  if (typeof val === 'object') {
+    return Object.values(/** @type {Record<string, unknown>} */ (val)).some((item) => hasValue(item, depth + 1));
+  }
+  return true;
+}
+
+/**
+ * Check a dotted property path, including properties inside arrays of objects.
+ * @param {Record<string, unknown>} data
+ * @param {string} path
+ * @returns {boolean}
+ */
+function hasPropertyPath(data, path) {
+  const parts = path.split('.').filter(Boolean);
+  if (parts.length === 0) return false;
+  return visit(data, 0, 0);
+
+  /** @param {unknown} value */
+  function visit(value, index, depth) {
+    if (depth > 50 || value === null || value === undefined) return false;
+    if (Array.isArray(value)) return value.some((item) => visit(item, index, depth + 1));
+    if (typeof value !== 'object') return false;
+    const child = /** @type {Record<string, unknown>} */ (value)[parts[index]];
+    return index === parts.length - 1
+      ? hasValue(child, depth + 1)
+      : visit(child, index + 1, depth + 1);
   }
 }
 
@@ -1432,38 +1456,6 @@ function validateProfilePage(data) {
 }
 
 /**
- * @param {Record<string, unknown>} data
- * @returns {Finding[]}
- */
-function validateSoftwareApplication(data) {
-  /** @type {Finding[]} */
-  const findings = [];
-  const offers = Array.isArray(data.offers) ? data.offers : [data.offers];
-  const hasOfferPrice = offers.some((offer) => {
-    return typeof offer === 'object' && offer !== null && hasProperty(/** @type {Record<string, unknown>} */ (offer), 'price');
-  });
-  if (!hasOfferPrice) {
-    findings.push({
-      severity: 'error',
-      code: 'SOFTWARE_MISSING_OFFER_PRICE',
-      message: 'SoftwareApplication requires offers.price for Google rich-result eligibility.',
-      path: 'offers.price',
-      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
-    });
-  }
-  if (!hasProperty(data, 'aggregateRating') && !hasProperty(data, 'review')) {
-    findings.push({
-      severity: 'error',
-      code: 'SOFTWARE_MISSING_RATING_OR_REVIEW',
-      message: 'SoftwareApplication requires aggregateRating or review for Google rich-result eligibility.',
-      path: 'aggregateRating',
-      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
-    });
-  }
-  return findings;
-}
-
-/**
  * Validate return-policy objects embedded in Organization or Product markup.
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
@@ -1641,10 +1633,10 @@ function validateEntity(entity) {
     return types.includes(candidate.type) || (candidate.type === 'LocalBusiness' && isLocalBusiness(types));
   })) {
     for (const req of rule.required) {
-      if (!hasProperty(data, req)) {
+      if (!hasPropertyPath(data, req)) {
         pushFinding(findings, {
           severity: 'error',
-          code: `MISSING_${req.toUpperCase()}`,
+          code: `MISSING_${req.replaceAll('.', '_').toUpperCase()}`,
           message: `${rule.type} is missing required property "${req}".`,
           entityId: id,
           path: req,
@@ -1653,13 +1645,25 @@ function validateEntity(entity) {
       }
     }
     for (const rec of rule.recommended) {
-      if (!hasProperty(data, rec)) {
+      if (!hasPropertyPath(data, rec)) {
         pushFinding(findings, {
           severity: 'info',
-          code: `RECOMMENDED_${rec.toUpperCase()}`,
+          code: `RECOMMENDED_${rec.replaceAll('.', '_').toUpperCase()}`,
           message: `${rule.type} is missing recommended property "${rec}".`,
           entityId: id,
           path: rec,
+          docsUrl: rule.docsUrl,
+        });
+      }
+    }
+    for (const alternatives of rule.anyOf ?? []) {
+      if (!alternatives.some((path) => hasPropertyPath(data, path))) {
+        pushFinding(findings, {
+          severity: 'error',
+          code: `MISSING_${alternatives.join('_OR_').toUpperCase()}`,
+          message: `${rule.type} requires one of: ${alternatives.map((path) => `"${path}"`).join(', ')}.`,
+          entityId: id,
+          path: alternatives.join(' | '),
           docsUrl: rule.docsUrl,
         });
       }
@@ -1731,10 +1735,6 @@ function validateEntity(entity) {
 
   if (types.includes('MerchantReturnPolicy')) {
     findings.push(...validateMerchantReturnPolicy(data).map((f) => ({ ...f, entityId: id })));
-  }
-
-  if (types.includes('SoftwareApplication')) {
-    findings.push(...validateSoftwareApplication(data).map((f) => ({ ...f, entityId: id })));
   }
 
   findings.push(...validateNestedMerchantReturnPolicies(data).map((f) => ({ ...f, entityId: id })));
@@ -1909,6 +1909,7 @@ function validate(snapshot, entities) {
 /** @typedef {import('./types.js').ScoreResult} ScoreResult */
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
+
 function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
     return entity.types.includes(rule.type) || (rule.type === 'LocalBusiness' && entity.types.some((type) => LOCAL_BUSINESS_TYPES.has(type)));
@@ -1944,11 +1945,13 @@ function coverageBonus(entities) {
 function richnessBonus(entities) {
   let bonus = 0;
   for (const entity of entities) {
-    const meaningful = new Set(
-      matchingRules(entity).flatMap((rule) => [...rule.required, ...rule.recommended]),
-    );
+    const rules = matchingRules(entity);
+    const meaningful = new Set(rules.flatMap((rule) => [...rule.required, ...rule.recommended]));
     for (const property of meaningful) {
-      if (property in entity.data) bonus += 1;
+      if (hasPropertyPath(entity.data, property)) bonus += 1;
+    }
+    for (const alternatives of rules.flatMap((rule) => rule.anyOf ?? [])) {
+      if (alternatives.some((property) => hasPropertyPath(entity.data, property))) bonus += 1;
     }
   }
   return Math.min(bonus, 15);

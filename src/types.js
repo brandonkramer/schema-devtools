@@ -118,8 +118,9 @@
 
 /** @typedef {object} TypeRule
  * @property {string} type
- * @property {string[]} required
+ * @property {string[]} required  Property paths required together, e.g. offers.price
  * @property {string[]} recommended
+ * @property {string[][]} [anyOf]  Alternative property-path groups; one path per group is required
  * @property {string} docsUrl
  */
 

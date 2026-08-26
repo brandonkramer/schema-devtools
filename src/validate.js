@@ -9,6 +9,7 @@ import {
   DEPRECATED_TYPES,
   FAQ_GOOGLE_STATUS,
   hasProperty,
+  hasPropertyPath,
   isRelativeUrl,
   collectUrlFields,
   collectValueChecks,
@@ -348,38 +349,6 @@ function validateProfilePage(data) {
 }
 
 /**
- * @param {Record<string, unknown>} data
- * @returns {Finding[]}
- */
-function validateSoftwareApplication(data) {
-  /** @type {Finding[]} */
-  const findings = [];
-  const offers = Array.isArray(data.offers) ? data.offers : [data.offers];
-  const hasOfferPrice = offers.some((offer) => {
-    return typeof offer === 'object' && offer !== null && hasProperty(/** @type {Record<string, unknown>} */ (offer), 'price');
-  });
-  if (!hasOfferPrice) {
-    findings.push({
-      severity: 'error',
-      code: 'SOFTWARE_MISSING_OFFER_PRICE',
-      message: 'SoftwareApplication requires offers.price for Google rich-result eligibility.',
-      path: 'offers.price',
-      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
-    });
-  }
-  if (!hasProperty(data, 'aggregateRating') && !hasProperty(data, 'review')) {
-    findings.push({
-      severity: 'error',
-      code: 'SOFTWARE_MISSING_RATING_OR_REVIEW',
-      message: 'SoftwareApplication requires aggregateRating or review for Google rich-result eligibility.',
-      path: 'aggregateRating',
-      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
-    });
-  }
-  return findings;
-}
-
-/**
  * Validate return-policy objects embedded in Organization or Product markup.
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
@@ -557,10 +526,10 @@ function validateEntity(entity) {
     return types.includes(candidate.type) || (candidate.type === 'LocalBusiness' && isLocalBusiness(types));
   })) {
     for (const req of rule.required) {
-      if (!hasProperty(data, req)) {
+      if (!hasPropertyPath(data, req)) {
         pushFinding(findings, {
           severity: 'error',
-          code: `MISSING_${req.toUpperCase()}`,
+          code: `MISSING_${req.replaceAll('.', '_').toUpperCase()}`,
           message: `${rule.type} is missing required property "${req}".`,
           entityId: id,
           path: req,
@@ -569,13 +538,25 @@ function validateEntity(entity) {
       }
     }
     for (const rec of rule.recommended) {
-      if (!hasProperty(data, rec)) {
+      if (!hasPropertyPath(data, rec)) {
         pushFinding(findings, {
           severity: 'info',
-          code: `RECOMMENDED_${rec.toUpperCase()}`,
+          code: `RECOMMENDED_${rec.replaceAll('.', '_').toUpperCase()}`,
           message: `${rule.type} is missing recommended property "${rec}".`,
           entityId: id,
           path: rec,
+          docsUrl: rule.docsUrl,
+        });
+      }
+    }
+    for (const alternatives of rule.anyOf ?? []) {
+      if (!alternatives.some((path) => hasPropertyPath(data, path))) {
+        pushFinding(findings, {
+          severity: 'error',
+          code: `MISSING_${alternatives.join('_OR_').toUpperCase()}`,
+          message: `${rule.type} requires one of: ${alternatives.map((path) => `"${path}"`).join(', ')}.`,
+          entityId: id,
+          path: alternatives.join(' | '),
           docsUrl: rule.docsUrl,
         });
       }
@@ -647,10 +628,6 @@ function validateEntity(entity) {
 
   if (types.includes('MerchantReturnPolicy')) {
     findings.push(...validateMerchantReturnPolicy(data).map((f) => ({ ...f, entityId: id })));
-  }
-
-  if (types.includes('SoftwareApplication')) {
-    findings.push(...validateSoftwareApplication(data).map((f) => ({ ...f, entityId: id })));
   }
 
   findings.push(...validateNestedMerchantReturnPolicies(data).map((f) => ({ ...f, entityId: id })));

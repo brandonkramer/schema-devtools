@@ -101,8 +101,9 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'SoftwareApplication',
-    required: ['name'],
-    recommended: ['operatingSystem', 'applicationCategory', 'offers', 'aggregateRating'],
+    required: ['name', 'offers.price'],
+    anyOf: [['aggregateRating', 'review']],
+    recommended: ['operatingSystem', 'applicationCategory'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
   },
   {

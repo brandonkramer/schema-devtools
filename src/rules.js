@@ -9,6 +9,7 @@ import { DEPRECATED_TYPES, FAQ_GOOGLE_STATUS } from './catalog/deprecations.js';
 import {
   matchRuleInCatalog,
   hasProperty,
+  hasPropertyPath,
   isRelativeUrl,
   collectUrlFields,
   isIso8601Date,
@@ -24,6 +25,7 @@ export {
   DEPRECATED_TYPES,
   FAQ_GOOGLE_STATUS,
   hasProperty,
+  hasPropertyPath,
   isRelativeUrl,
   collectUrlFields,
   isIso8601Date,

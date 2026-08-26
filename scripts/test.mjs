@@ -9,7 +9,7 @@ import { validate } from '../src/validate.js';
 import { score } from '../src/score.js';
 import { RICH_RESULT_RULES } from '../src/catalog/rich-results.js';
 import { DEPRECATED_TYPES, FAQ_GOOGLE_STATUS } from '../src/catalog/deprecations.js';
-import { matchRuleInCatalog, hasProperty, isIso8601Date, isIso4217Currency } from '../src/catalog/syntax.js';
+import { matchRuleInCatalog, hasProperty, hasPropertyPath, isIso8601Date, isIso4217Currency } from '../src/catalog/syntax.js';
 import { formatEvalException, listen } from '../devtools/host.js';
 import { matchesSearch, serpCards, store, visibleEntities } from '../ui/store.js';
 import { FIXTURES } from '../sandbox/fixtures.js';
@@ -188,8 +188,8 @@ assert(hasCode(incompleteCourse, 'MISSING_DESCRIPTION'));
 assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Recipe', name: 'Soup' }), 'MISSING_IMAGE'));
 assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Dataset', name: 'Data' }), 'MISSING_DESCRIPTION'));
 const software = runInspect({ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'App' });
-assert(hasCode(software, 'SOFTWARE_MISSING_OFFER_PRICE'));
-assert(hasCode(software, 'SOFTWARE_MISSING_RATING_OR_REVIEW'));
+assert(hasCode(software, 'MISSING_OFFERS_PRICE'));
+assert(hasCode(software, 'MISSING_AGGREGATERATING_OR_REVIEW'));
 assert(hasCode(runInspect({ '@context': 'https://schema.org', '@type': 'Restaurant', name: 'Cafe' }), 'MISSING_ADDRESS'));
 assert(hasCode(runInspect({
   '@context': 'https://schema.org',
@@ -286,6 +286,7 @@ for (const rule of RICH_RESULT_RULES) {
   assert(rule.docsUrl && /^https?:\/\//i.test(rule.docsUrl), `Rule ${rule.type} has invalid docsUrl: ${rule.docsUrl}`);
   assert(Array.isArray(rule.required), `Rule ${rule.type} required must be an array`);
   assert(Array.isArray(rule.recommended), `Rule ${rule.type} recommended must be an array`);
+  assert(!rule.anyOf || rule.anyOf.every((alternatives) => Array.isArray(alternatives) && alternatives.length > 0), `Rule ${rule.type} anyOf must contain property-path alternatives`);
 }
 
 assert(Array.isArray(DEPRECATED_TYPES) && DEPRECATED_TYPES.length >= 2, 'Must contain deprecated types list.');
@@ -293,6 +294,8 @@ assert(FAQ_GOOGLE_STATUS.code && FAQ_GOOGLE_STATUS.docsUrl, 'FAQ status must hav
 
 assert.equal(typeof matchRuleInCatalog, 'function');
 assert.equal(typeof hasProperty, 'function');
+assert.equal(typeof hasPropertyPath, 'function');
+assert.equal(hasPropertyPath({ offers: [{ price: 0 }] }, 'offers.price'), true);
 assert.equal(typeof isIso8601Date, 'function');
 assert.equal(typeof isIso4217Currency, 'function');
 assert.equal(isIso8601Date('2026-08-26'), true);

@@ -26,17 +26,40 @@ export function matchRuleInCatalog(catalog, types) {
  */
 export function hasProperty(data, prop) {
   return hasValue(data[prop]);
+}
 
-  /** @param {unknown} val */
-  function hasValue(val, depth = 0) {
-    if (depth > 50) return false;
-    if (val === undefined || val === null) return false;
-    if (typeof val === 'string' && val.trim() === '') return false;
-    if (Array.isArray(val)) return val.some((item) => hasValue(item, depth + 1));
-    if (typeof val === 'object') {
-      return Object.values(/** @type {Record<string, unknown>} */ (val)).some((item) => hasValue(item, depth + 1));
-    }
-    return true;
+/** @param {unknown} val */
+function hasValue(val, depth = 0) {
+  if (depth > 50) return false;
+  if (val === undefined || val === null) return false;
+  if (typeof val === 'string' && val.trim() === '') return false;
+  if (Array.isArray(val)) return val.some((item) => hasValue(item, depth + 1));
+  if (typeof val === 'object') {
+    return Object.values(/** @type {Record<string, unknown>} */ (val)).some((item) => hasValue(item, depth + 1));
+  }
+  return true;
+}
+
+/**
+ * Check a dotted property path, including properties inside arrays of objects.
+ * @param {Record<string, unknown>} data
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function hasPropertyPath(data, path) {
+  const parts = path.split('.').filter(Boolean);
+  if (parts.length === 0) return false;
+  return visit(data, 0, 0);
+
+  /** @param {unknown} value */
+  function visit(value, index, depth) {
+    if (depth > 50 || value === null || value === undefined) return false;
+    if (Array.isArray(value)) return value.some((item) => visit(item, index, depth + 1));
+    if (typeof value !== 'object') return false;
+    const child = /** @type {Record<string, unknown>} */ (value)[parts[index]];
+    return index === parts.length - 1
+      ? hasValue(child, depth + 1)
+      : visit(child, index + 1, depth + 1);
   }
 }
 

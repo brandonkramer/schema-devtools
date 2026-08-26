@@ -9,6 +9,7 @@
 /** @typedef {import('./types.js').ScoreLabel} ScoreLabel */
 
 import { LOCAL_BUSINESS_TYPES, RICH_RESULT_RULES } from './catalog/rich-results.js';
+import { hasPropertyPath } from './catalog/syntax.js';
 
 function matchingRules(entity) {
   return RICH_RESULT_RULES.filter((rule) => {
@@ -45,11 +46,13 @@ function coverageBonus(entities) {
 function richnessBonus(entities) {
   let bonus = 0;
   for (const entity of entities) {
-    const meaningful = new Set(
-      matchingRules(entity).flatMap((rule) => [...rule.required, ...rule.recommended]),
-    );
+    const rules = matchingRules(entity);
+    const meaningful = new Set(rules.flatMap((rule) => [...rule.required, ...rule.recommended]));
     for (const property of meaningful) {
-      if (property in entity.data) bonus += 1;
+      if (hasPropertyPath(entity.data, property)) bonus += 1;
+    }
+    for (const alternatives of rules.flatMap((rule) => rule.anyOf ?? [])) {
+      if (alternatives.some((property) => hasPropertyPath(entity.data, property))) bonus += 1;
     }
   }
   return Math.min(bonus, 15);
