@@ -57,16 +57,22 @@ Switch between realistic mock fixtures (E-Commerce, Multi-Author Article, Restau
 
 ### Validate any File or URL from Terminal
 ```bash
-# Validate a local JSON-LD file
-npm run validate ./path/to/schema.json
+# Validate sandbox fixtures or any local schema file
+npm run validate ./sandbox/fixtures.js
 
 # Validate a live website directly
 npm run validate https://example.com/product
 ```
 
+### Compare with Official Schema.org Validator
+```bash
+# Automated parity comparison with validator.schema.org
+npm run compare
+```
+
 ### Run Full Test Suite
 ```bash
-# Runs bundle engine, smoke checks, rule audits, and security guardrails
+# Runs bundle engine, schema unit tests, catalog audits, and security guardrails
 npm test
 ```
 
