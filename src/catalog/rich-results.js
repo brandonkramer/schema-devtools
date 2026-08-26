@@ -116,7 +116,7 @@ export const RICH_RESULT_RULES = [
   },
   {
     type: 'Review',
-    required: ['itemReviewed', 'itemReviewed.name', 'reviewRating', 'reviewRating.ratingValue', 'author', 'author.name'],
+    required: ['reviewRating', 'reviewRating.ratingValue', 'author', 'author.name'],
     recommended: ['datePublished', 'reviewBody'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
   },

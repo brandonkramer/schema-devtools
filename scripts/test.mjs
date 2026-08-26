@@ -364,12 +364,25 @@ const referencedReview = runInspect({
   '@context': 'https://schema.org',
   '@graph': [
     { '@id': '#review', '@type': 'Review', itemReviewed: { '@id': '#product' }, reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@id': '#author' } },
-    { '@id': '#product', '@type': 'Product', name: 'Product', review: { '@id': '#review' } },
+    { '@id': '#product', '@type': 'Product', name: 'Product', offers: { '@type': 'Offer', price: 10 } },
     { '@id': '#author', '@type': 'Person', name: 'Author' },
   ],
 });
 assert(!hasCode(referencedReview, 'MISSING_ITEMREVIEWED_NAME'));
 assert(!hasCode(referencedReview, 'MISSING_AUTHOR_NAME'));
+const nestedReview = runInspect({
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@id': '#product', '@type': 'Product', name: 'Product', review: { '@id': '#review' } },
+    { '@id': '#review', '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@type': 'Person', name: 'Author' } },
+  ],
+});
+assert(!hasCode(nestedReview, 'MISSING_ITEMREVIEWED'), 'Reviews nested through a review property must not require itemReviewed.');
+const standaloneReview = runInspect({
+  '@context': 'https://schema.org', '@type': 'Review',
+  reviewRating: { '@type': 'Rating', ratingValue: 5 }, author: { '@type': 'Person', name: 'Author' },
+});
+assert(hasCode(standaloneReview, 'MISSING_ITEMREVIEWED'), 'Standalone Reviews must require itemReviewed.');
 const referencedProfile = runInspect({
   '@context': 'https://schema.org',
   '@graph': [

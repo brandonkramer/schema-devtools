@@ -590,7 +590,7 @@ const RICH_RESULT_RULES = [
   },
   {
     type: 'Review',
-    required: ['itemReviewed', 'itemReviewed.name', 'reviewRating', 'reviewRating.ratingValue', 'author', 'author.name'],
+    required: ['reviewRating', 'reviewRating.ratingValue', 'author', 'author.name'],
     recommended: ['datePublished', 'reviewBody'],
     docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
   },
@@ -1647,6 +1647,37 @@ function validateProductGroup(data, entities) {
 }
 
 /**
+ * Google only requires itemReviewed when the Review is not nested through another entity's review property.
+ * @param {Record<string, unknown>} data
+ * @param {Entity[]} entities
+ * @returns {Finding[]}
+ */
+function validateReview(data, entities) {
+  const reviewEntity = entities.find((entity) => entity.data === data);
+  const reviewId = typeof data['@id'] === 'string' ? data['@id'] : reviewEntity?.id;
+  const isNested = entities.some((entity) => {
+    if (entity === reviewEntity) return false;
+    const reviews = Array.isArray(entity.data.review) ? entity.data.review : [entity.data.review];
+    return reviews.some((review) => {
+      if (review === data) return true;
+      if (!reviewId || typeof review !== 'object' || review === null || Array.isArray(review)) return false;
+      return review['@id'] === reviewId;
+    });
+  });
+  if (isNested) return [];
+
+  return ['itemReviewed', 'itemReviewed.name']
+    .filter((path) => !hasEntityPropertyPath(data, path, entities))
+    .map((path) => ({
+      severity: 'error',
+      code: `MISSING_${path.replaceAll('.', '_').toUpperCase()}`,
+      message: `Review is missing required property "${path}".`,
+      path,
+      docsUrl: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
+    }));
+}
+
+/**
  * @param {Record<string, unknown>} data
  * @returns {Finding[]}
  */
@@ -1976,6 +2007,10 @@ function validateEntity(entity, entities) {
 
   if (types.includes('ProductGroup')) {
     findings.push(...validateProductGroup(data, entities).map((f) => ({ ...f, entityId: id })));
+  }
+
+  if (types.includes('Review')) {
+    findings.push(...validateReview(data, entities).map((f) => ({ ...f, entityId: id })));
   }
 
   if (types.includes('DiscussionForumPosting') || types.includes('SocialMediaPosting')) {
