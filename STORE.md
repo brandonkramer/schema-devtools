@@ -52,7 +52,7 @@ English
 
 1. Schema panel with score, entity list, and tree view on a page with JSON-LD
 2. Visual Knowledge Graph showing connected @id entity relationships
-3. Google SERP Preview card simulation (Product, Article, Recipe)
+3. Google SERP Preview card simulation (Product, Article, Review stars; labeled as simulated)
 4. Findings tab showing errors, warnings, and Google Search guidelines
 5. Elements sidebar showing schema on a selected DOM node
 6. Dark theme view

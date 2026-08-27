@@ -27,7 +27,8 @@
     "test:dist": "node scripts/test-dist.mjs",
     "release": "npm test && npm run test:dist && npm run package",
     "validate": "node scripts/validate.mjs",
-    "compare": "node scripts/compare.mjs"
+    "compare": "node scripts/compare.mjs",
+    "icons": "python3 scripts/generate-icons.py"
   },
   "devDependencies": {
     "esbuild": "0.25.9",
