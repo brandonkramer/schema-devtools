@@ -3,7 +3,7 @@
   "name": "Schema DevTools",
   "short_name": "Schema",
   "version": "1.0.0",
-  "description": "Inspect, validate, and score JSON-LD, Microdata, and RDFa structured data directly in Chrome DevTools. Local-only analysis with no data collection.",
+  "description": "Inspect, validate & score JSON-LD, Microdata & RDFa in Chrome DevTools. Local-only. No data collection.",
   "devtools_page": "devtools/devtools.html",
   "icons": {
     "16": "icons/icon-16.png",

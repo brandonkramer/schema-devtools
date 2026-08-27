@@ -547,6 +547,7 @@ const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8')
 assert.equal(manifest.manifest_version, 3);
 assert(!('host_permissions' in manifest));
 assert(!('permissions' in manifest) || manifest.permissions.length === 0);
+assert(manifest.description.length <= 132, `manifest.json description must be <= 132 characters (got ${manifest.description.length})`);
 
 // Panel Host Source Checks
 const panelSource = readFileSync(new URL('devtools/panel.js', root), 'utf8');
