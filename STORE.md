@@ -48,14 +48,18 @@ English
 - **Data collection:** None — all processing is local
 - **Privacy policy URL:** https://brandonkramer.github.io/schema-devtools/privacy.html (Fallback: https://raw.githubusercontent.com/brandonkramer/schema-devtools/main/privacy.html)
 
-## Suggested screenshots
+## Screenshots & Store Assets
 
-1. Schema panel with score, entity list, and tree view on a page with JSON-LD
-2. Visual Knowledge Graph showing connected @id entity relationships
-3. Google SERP Preview card simulation (Product, Article, Review stars; labeled as simulated)
-4. Findings tab showing errors, warnings, and Google Search guidelines
-5. Elements sidebar showing schema on a selected DOM node
-6. Dark theme view
+1. **Page Tree View & Quality Score**
+   ![Schema DevTools Tree View](screenshot.png)
+
+2. **Validation Findings & Rules Breakdown**
+   ![Schema DevTools Findings View](screenshot-findings.png)
+
+### Chrome Web Store Upload Specifications
+- **Dimensions:** Exactly `1280 × 800 px` or `640 × 400 px` (16:10 aspect ratio).
+- **Format:** `.png` or `.jpg` (RGB/sRGB without transparent backgrounds).
+- **Limit:** 1 to 5 screenshots in the Developer Dashboard gallery.
 
 ## Keywords (optional)
 
