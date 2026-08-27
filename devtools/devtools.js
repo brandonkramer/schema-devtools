@@ -1,6 +1,6 @@
 chrome.devtools.panels.create(
   'Schema',
-  'icons/icon-32.png',
+  'assets/icons/icon-32.png',
   'devtools/panel.html',
   (panel) => {
     const notifyVisibility = (visible) => {

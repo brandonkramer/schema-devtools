@@ -60,7 +60,7 @@ npm run build
 | `devtools/` | Chrome DevTools host panel, Elements sidebar, and message bridges |
 | `sandbox/` | Standalone browser testbed and test fixtures (`npm run dev`) |
 | `scripts/` | Bundling, CLI validation, and test automation scripts |
-| `icons/` | Extension icons and SVG master |
+| `assets/icons/` | Extension icons and SVG master |
 
 ---
 

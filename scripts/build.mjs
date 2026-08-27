@@ -121,9 +121,10 @@ for (const html of [
 
 const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 writeFileSync(outputPath('manifest.json'), `${JSON.stringify(manifest)}\n`);
-mkdirSync(outputPath('icons'), { recursive: true });
 for (const icon of Object.values(manifest.icons || {})) {
-  copyFileSync(join(root, icon), outputPath(icon));
+  const dest = outputPath(icon);
+  mkdirSync(dirname(dest), { recursive: true });
+  copyFileSync(join(root, icon), dest);
 }
 for (const license of ['LICENSE.txt', 'NOTICE.txt']) {
   const source = join(root, 'vendor', license);

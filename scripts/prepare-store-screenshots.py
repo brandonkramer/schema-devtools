@@ -4,7 +4,7 @@ from PIL import Image, ImageOps, ImageDraw, ImageFont
 assets_dir = Path(__file__).parent.parent / 'assets'
 store_dir = assets_dir / 'store'
 raw_dir = assets_dir / 'raw'
-icons_dir = Path(__file__).parent.parent / 'icons'
+icons_dir = assets_dir / 'icons'
 store_dir.mkdir(parents=True, exist_ok=True)
 raw_dir.mkdir(parents=True, exist_ok=True)
 

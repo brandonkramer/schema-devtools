@@ -6,18 +6,18 @@
   "description": "Inspect, validate & score JSON-LD, Microdata & RDFa in Chrome DevTools. Local-only. No data collection.",
   "devtools_page": "devtools/devtools.html",
   "icons": {
-    "16": "icons/icon-16.png",
-    "32": "icons/icon-32.png",
-    "48": "icons/icon-48.png",
-    "128": "icons/icon-128.png"
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
   },
   "action": {
     "default_title": "Schema DevTools — open DevTools and select the Schema tab",
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon-16.png",
-      "32": "icons/icon-32.png",
-      "48": "icons/icon-48.png"
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png",
+      "48": "assets/icons/icon-48.png"
     }
   }
 }

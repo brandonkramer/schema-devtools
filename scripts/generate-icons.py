@@ -9,7 +9,7 @@ from PIL import Image
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    icons_dir = root / 'icons'
+    icons_dir = root / 'assets' / 'icons'
     icons_dir.mkdir(parents=True, exist_ok=True)
     
     # Base high-res flat vector master
