@@ -1,13 +1,15 @@
 from pathlib import Path
 from PIL import Image, ImageOps
 
-store_dir = Path(__file__).parent.parent / 'assets' / 'store'
+assets_dir = Path(__file__).parent.parent / 'assets'
+store_dir = assets_dir / 'store'
+raw_dir = assets_dir / 'raw'
 store_dir.mkdir(parents=True, exist_ok=True)
-root_dir = Path(__file__).parent.parent
+raw_dir.mkdir(parents=True, exist_ok=True)
 
 screenshots = [
-    ('screenshot-1-1280x800.png', root_dir / 'screenshot.png'),
-    ('screenshot-2-1280x800.png', root_dir / 'screenshot-findings.png')
+    ('screenshot-1-1280x800.png', raw_dir / 'screenshot.png'),
+    ('screenshot-2-1280x800.png', raw_dir / 'screenshot-findings.png')
 ]
 
 for out_name, in_path in screenshots:
