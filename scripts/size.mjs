@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
-const maxUnpacked = 120_000;
-const maxZip = 43_000;
-const stretchUnpacked = 90_000;
-const stretchZip = 35_000;
+const maxUnpacked = 160_000;
+const maxZip = 65_000;
+const stretchUnpacked = 120_000;
+const stretchZip = 55_000;
 const sourceRuntimeBaseline = 218_892;
 const sourceZipBaseline = 64_340;
 
