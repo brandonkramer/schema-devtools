@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 
@@ -548,6 +548,12 @@ assert.equal(manifest.manifest_version, 3);
 assert(!('host_permissions' in manifest));
 assert(!('permissions' in manifest) || manifest.permissions.length === 0);
 assert(manifest.description.length <= 132, `manifest.json description must be <= 132 characters (got ${manifest.description.length})`);
+for (const icon of Object.values(manifest.icons || {})) {
+  assert(existsSync(new URL(icon, root)), `Manifest icon ${icon} must exist on disk.`);
+}
+for (const icon of Object.values(manifest.action?.default_icon || {})) {
+  assert(existsSync(new URL(icon, root)), `Action icon ${icon} must exist on disk.`);
+}
 
 // Panel Host Source Checks
 const panelSource = readFileSync(new URL('devtools/panel.js', root), 'utf8');

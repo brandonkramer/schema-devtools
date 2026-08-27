@@ -83,6 +83,9 @@ assert.deepEqual(distManifest, sourceManifest, 'Distribution manifest must match
 assert.equal(distManifest.manifest_version, 3);
 assert(!('permissions' in distManifest) || distManifest.permissions.length === 0);
 assert(!('host_permissions' in distManifest) || distManifest.host_permissions.length === 0);
+for (const icon of Object.values(distManifest.icons || {})) {
+  assert(existsSync(join(dist, icon)), `Distribution icon ${icon} must exist.`);
+}
 
 const panelHtml = readFileSync(join(dist, 'devtools/panel.html'), 'utf8');
 const sidebarHtml = readFileSync(join(dist, 'devtools/sidebar.html'), 'utf8');
