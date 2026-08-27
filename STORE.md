@@ -46,7 +46,7 @@ English
 - **Single purpose:** Inspect and validate on-page schema markup in DevTools
 - **Permissions:** None (uses `devtools_page` only)
 - **Data collection:** None — all processing is local
-- **Privacy policy URL:** Link to hosted `privacy.html` or equivalent page stating local-only analysis
+- **Privacy policy URL:** https://brandonkramer.github.io/schema-devtools/privacy.html (Fallback: https://raw.githubusercontent.com/brandonkramer/schema-devtools/main/privacy.html)
 
 ## Suggested screenshots
 
