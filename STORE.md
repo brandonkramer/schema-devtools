@@ -51,10 +51,10 @@ English
 ## Screenshots & Store Assets
 
 1. **Page Tree View & Quality Score**
-   ![Schema DevTools Tree View](screenshot.png)
+   ![Schema DevTools Tree View](assets/store/screenshot-1-1280x800.png)
 
 2. **Validation Findings & Rules Breakdown**
-   ![Schema DevTools Findings View](screenshot-findings.png)
+   ![Schema DevTools Findings View](assets/store/screenshot-2-1280x800.png)
 
 ### Chrome Web Store Upload Specifications
 - **Dimensions:** Exactly `1280 × 800 px` or `640 × 400 px` (16:10 aspect ratio).
