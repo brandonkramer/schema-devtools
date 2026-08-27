@@ -2,7 +2,9 @@
 
 Inspect, validate, and score structured data (**JSON-LD**, **Microdata**, **RDFa**) directly in Chrome DevTools. All analysis runs **100% locally** in your browser — zero host permissions, zero telemetry.
 
-![Schema DevTools Panel](screenshot.png)
+![Schema DevTools Tree View](screenshot.png)
+
+![Schema DevTools Findings View](screenshot-findings.png)
 
 ---
 
