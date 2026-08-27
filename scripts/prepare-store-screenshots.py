@@ -9,7 +9,8 @@ raw_dir.mkdir(parents=True, exist_ok=True)
 
 screenshots = [
     ('screenshot-1-1280x800.png', raw_dir / 'screenshot.png'),
-    ('screenshot-2-1280x800.png', raw_dir / 'screenshot-findings.png')
+    ('screenshot-2-1280x800.png', raw_dir / 'screenshot-findings.png'),
+    ('screenshot-3-1280x800.png', raw_dir / 'screenshot-graph.png')
 ]
 
 for out_name, in_path in screenshots:

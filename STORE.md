@@ -56,6 +56,9 @@ English
 2. **Validation Findings & Rules Breakdown**
    ![Schema DevTools Findings View](assets/store/screenshot-2-1280x800.png)
 
+3. **Visual Entity Knowledge Graph & Relationships**
+   ![Visual Entity Knowledge Graph](assets/store/screenshot-3-1280x800.png)
+
 ### Chrome Web Store Upload Specifications
 - **Dimensions:** Exactly `1280 × 800 px` or `640 × 400 px` (16:10 aspect ratio).
 - **Format:** `.png` or `.jpg` (RGB/sRGB without transparent backgrounds).
